@@ -86,6 +86,7 @@
           '-framework QuartzCore',
           '-framework SystemConfiguration',
           '-ObjC',
+          '<@(geojsonvt_ldflags)',
         ],
       },
 
