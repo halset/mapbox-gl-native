@@ -37,7 +37,7 @@ default: ;
 
 #### Dependencies ##############################################################
 
-ifeq ($(IS_GIT_REPOSITORY),true)
+ifneq (,$(wildcard .git/.))
 SUBMODULES += .mason/mason.sh
 .mason/mason.sh:
 	./scripts/flock.py .git/Submodule.lock git submodule update --init .mason
