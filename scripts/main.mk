@@ -22,7 +22,6 @@ ifneq (,$(wildcard scripts/$(HOST)/$(HOST_VERSION)/configure.sh))
 	CONFIGURE_FILES += scripts/$(HOST)/$(HOST_VERSION)/configure.sh
 endif
 
-
 # Text formatting
 TEXT_BOLD = \033[1m
 COLOR_GREEN = \033[32m
@@ -34,6 +33,7 @@ default: ;
 
 #### Dependencies ##############################################################
 
+ifeq (IS_GIT_REPOSITORY,true)
 SUBMODULES += .mason/mason.sh
 .mason/mason.sh:
 	./scripts/flock.py .git/Submodule.lock git submodule update --init .mason
@@ -50,6 +50,7 @@ platform/ios/vendor/SMCalloutView/SMCalloutView.h:
 SUBMODULES += test/ios/KIF/KIF.xcodeproj
 test/ios/KIF/KIF.xcodeproj:
 	./scripts/flock.py .git/Submodule.lock git submodule update --init test/ios/KIF
+endif
 endif
 
 # Wildcard targets get removed after build by default, but we want to preserve the config.
