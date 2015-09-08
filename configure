@@ -17,11 +17,13 @@ function warn { >&2 echo -e "\033[1m\033[33m$1\033[0m"; }
 
 # Install mason
 if [ -d "`pwd`/.git" ]; then
+    info "This build is within a git repository"
     export MASON_DIR="`pwd`/.mason"
     export PATH="${MASON_DIR}:${PATH}"
     export IS_GIT_REPOSITORY=true
 else
-    which mason || (echo "You must install mason to build this module (https://github.com/mapbox/mason)" && false)
+    info "This build is NOT within a git repository"
+    which mason || abort "You must install mason to build mapbox-gl-native (https://github.com/mapbox/mason)"
     export MASON_DIR="$(dirname $(readlink $(which mason)))"
     export IS_GIT_REPOSITORY=false
 fi

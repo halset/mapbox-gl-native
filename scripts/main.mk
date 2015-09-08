@@ -16,6 +16,10 @@ HOST_VERSION ?= $(BUILD_VERSION)
 export MASON_PLATFORM=$(HOST)
 export MASON_PLATFORM_VERSION=$(HOST_VERSION)
 
+ifneq (,$(wildcard scripts/$(HOST)/$(HOST_VERSION)/configure.sh))
+	CONFIGURE_FILES += scripts/$(HOST)/$(HOST_VERSION)/configure.sh
+endif
+
 HOST_SLUG = $(HOST)-$(HOST_VERSION)
 CONFIGURE_FILES = scripts/$(HOST)/configure.sh
 ifneq (,$(wildcard scripts/$(HOST)/$(HOST_VERSION)/configure.sh))
@@ -33,7 +37,7 @@ default: ;
 
 #### Dependencies ##############################################################
 
-ifeq (IS_GIT_REPOSITORY,true)
+ifeq ($(IS_GIT_REPOSITORY),true)
 SUBMODULES += .mason/mason.sh
 .mason/mason.sh:
 	./scripts/flock.py .git/Submodule.lock git submodule update --init .mason
