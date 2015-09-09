@@ -7,7 +7,6 @@ DEFAULT_REV = 'unknown'
 
 def is_git_repo():
     try:
-        subprocess.check_output("which git", shell=True)
         subprocess.check_output("git rev-parse", shell=True)
         return True
     except subprocess.CalledProcessError as exc:

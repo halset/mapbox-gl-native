@@ -26,6 +26,7 @@ ifneq (,$(wildcard scripts/$(HOST)/$(HOST_VERSION)/configure.sh))
 	CONFIGURE_FILES += scripts/$(HOST)/$(HOST_VERSION)/configure.sh
 endif
 
+
 # Text formatting
 TEXT_BOLD = \033[1m
 COLOR_GREEN = \033[32m
