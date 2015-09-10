@@ -7,5 +7,5 @@ set -u
 xctool \
     -project ./test/ios/ios-tests.xcodeproj \
     -scheme 'Mapbox GL Tests' \
-    -sdk iphonesimulator8.4 \
+    -sdk iphonesimulator9.0 \
     test
