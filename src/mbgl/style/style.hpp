@@ -8,7 +8,6 @@
 #include <mbgl/map/sprite.hpp>
 #include <mbgl/text/glyph_store.hpp>
 
-#include <mbgl/util/uv.hpp>
 #include <mbgl/util/ptr.hpp>
 #include <mbgl/util/noncopyable.hpp>
 #include <mbgl/util/chrono.hpp>
@@ -32,8 +31,7 @@ class Style : public GlyphStore::Observer,
               public Sprite::Observer,
               public util::noncopyable {
 public:
-    Style(MapData&,
-          uv_loop_t*);
+    Style(MapData&);
     ~Style();
 
     class Observer {
@@ -41,6 +39,7 @@ public:
         virtual ~Observer() = default;
 
         virtual void onTileDataChanged() = 0;
+        virtual void onSpriteStoreLoaded() = 0;
         virtual void onResourceLoadingFailed(std::exception_ptr error) = 0;
     };
 
