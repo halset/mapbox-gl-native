@@ -150,6 +150,15 @@ optional<std::pair<Response, uint64_t>> OfflineDatabase::getInternal(const Resou
         return getResource(resource);
     }
 }
+    
+optional<int64_t> OfflineDatabase::hasInternal(const Resource& resource) {
+    if (resource.kind == Resource::Kind::Tile) {
+        assert(resource.tileData);
+        return hasTile(*resource.tileData);
+    } else {
+        return hasResource(resource);
+    }
+}
 
 std::pair<bool, uint64_t> OfflineDatabase::put(const Resource& resource, const Response& response) {
     return putInternal(resource, response, true);
@@ -192,6 +201,14 @@ std::pair<bool, uint64_t> OfflineDatabase::putInternal(const Resource& resource,
 }
 
 optional<std::pair<Response, uint64_t>> OfflineDatabase::getResource(const Resource& resource) {
+    
+    auto it = resourceCache.find(resource.url);
+    if (it != resourceCache.end()) {
+        Response response = it->second;
+        uint64_t size = response.data->length();
+        return std::make_pair(response, size);
+    }
+    
     // clang-format off
     Statement accessedStmt = getStatement(
         "UPDATE resources SET accessed = ?1 WHERE url = ?2");
@@ -200,7 +217,7 @@ optional<std::pair<Response, uint64_t>> OfflineDatabase::getResource(const Resou
     accessedStmt->bind(1, util::now());
     accessedStmt->bind(2, resource.url);
     accessedStmt->run();
-
+    
     // clang-format off
     Statement stmt = getStatement(
         //        0      1        2       3        4
@@ -232,14 +249,34 @@ optional<std::pair<Response, uint64_t>> OfflineDatabase::getResource(const Resou
         response.data = std::make_shared<std::string>(*data);
         size = data->length();
     }
+    
+    resourceCache[resource.url] = response;
 
     return std::make_pair(response, size);
+}
+    
+optional<int64_t> OfflineDatabase::hasResource(const Resource& resource) {
+    // clang-format off
+    Statement stmt = getStatement("SELECT length(data) FROM resources WHERE url = ?");
+    // clang-format on
+    
+    stmt->bind(1, resource.url);
+    
+    if (!stmt->run()) {
+        return {};
+    }
+    
+    optional<int64_t> size = stmt->get<optional<int64_t>>(0);
+    return size;
 }
 
 bool OfflineDatabase::putResource(const Resource& resource,
                                   const Response& response,
                                   const std::string& data,
                                   bool compressed) {
+    
+    resourceCache.erase(resource.url);
+    
     if (response.notModified) {
         // clang-format off
         Statement update = getStatement(
@@ -384,6 +421,32 @@ optional<std::pair<Response, uint64_t>> OfflineDatabase::getTile(const Resource:
     }
 
     return std::make_pair(response, size);
+}
+    
+optional<int64_t> OfflineDatabase::hasTile(const Resource::TileData& tile) {
+    // clang-format off
+    Statement stmt = getStatement(
+                                  "SELECT length(data) "
+                                  "FROM tiles "
+                                  "WHERE url_template = ?1 "
+                                  "  AND pixel_ratio  = ?2 "
+                                  "  AND x            = ?3 "
+                                  "  AND y            = ?4 "
+                                  "  AND z            = ?5 ");
+    // clang-format on
+    
+    stmt->bind(1, tile.urlTemplate);
+    stmt->bind(2, tile.pixelRatio);
+    stmt->bind(3, tile.x);
+    stmt->bind(4, tile.y);
+    stmt->bind(5, tile.z);
+    
+    if (!stmt->run()) {
+        return {};
+    }
+    
+    optional<int64_t> size = stmt->get<optional<int64_t>>(0);
+    return size;
 }
 
 bool OfflineDatabase::putTile(const Resource::TileData& tile,
@@ -546,6 +609,16 @@ optional<std::pair<Response, uint64_t>> OfflineDatabase::getRegionResource(int64
         markUsed(regionID, resource);
     }
 
+    return response;
+}
+    
+optional<int64_t> OfflineDatabase::hasRegionResource(int64_t regionID, const Resource& resource) {
+    auto response = hasInternal(resource);
+    
+    if (response) {
+        markUsed(regionID, resource);
+    }
+    
     return response;
 }
 
