@@ -64,6 +64,7 @@ private:
     void removeExisting();
     void migrateToVersion3();
     void migrateToVersion5();
+    void migrateToVersion6();
 
     class Statement {
     public:
@@ -95,7 +96,7 @@ private:
     std::pair<bool, uint64_t> putInternal(const Resource&, const Response&, bool evict);
 
     // Return value is true iff the resource was previously unused by any other regions.
-    bool markUsed(int64_t regionID, const Resource&);
+    bool markUsed(int64_t regionID, const Resource&, int64_t resourceSize);
 
     std::pair<int64_t, int64_t> getCompletedResourceCountAndSize(int64_t regionID);
     std::pair<int64_t, int64_t> getCompletedTileCountAndSize(int64_t regionID);

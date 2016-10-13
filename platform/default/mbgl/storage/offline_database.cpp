@@ -50,7 +50,8 @@ void OfflineDatabase::ensureSchema() {
             case 2: migrateToVersion3(); // fall through
             case 3: // no-op and fall through
             case 4: migrateToVersion5(); // fall through
-            case 5: return;
+            case 5: migrateToVersion6(); // fall through
+            case 6: return;
             default: throw std::runtime_error("unknown schema version");
             }
 
@@ -84,7 +85,7 @@ void OfflineDatabase::ensureSchema() {
         db->exec("PRAGMA journal_mode = DELETE");
         db->exec("PRAGMA synchronous = FULL");
         db->exec(schema);
-        db->exec("PRAGMA user_version = 5");
+        db->exec("PRAGMA user_version = 6");
     } catch (...) {
         Log::Error(Event::Database, "Unexpected error creating database schema: %s", util::toString(std::current_exception()).c_str());
         throw;
@@ -127,6 +128,12 @@ void OfflineDatabase::migrateToVersion5() {
     db->exec("PRAGMA user_version = 5");
 }
 
+void OfflineDatabase::migrateToVersion6() {
+    db->exec("ALTER TABLE regions add tiles_count integer");
+    db->exec("ALTER TABLE regions add tiles_size integer");
+    db->exec("PRAGMA user_version = 6");
+}
+    
 OfflineDatabase::Statement OfflineDatabase::getStatement(const char * sql) {
     auto it = statements.find(sql);
 
@@ -559,8 +566,8 @@ OfflineRegion OfflineDatabase::createRegion(const OfflineRegionDefinition& defin
                                             const OfflineRegionMetadata& metadata) {
     // clang-format off
     Statement stmt = getStatement(
-        "INSERT INTO regions (definition, description) "
-        "VALUES              (?1,         ?2) ");
+        "INSERT INTO regions (definition, description, tiles_count, tiles_size) "
+        "VALUES              (?1,         ?2,          0,           0)");
     // clang-format on
 
     stmt->bind(1, encodeOfflineRegionDefinition(definition));
@@ -603,7 +610,7 @@ optional<std::pair<Response, uint64_t>> OfflineDatabase::getRegionResource(int64
     auto response = getInternal(resource);
 
     if (response) {
-        markUsed(regionID, resource);
+        markUsed(regionID, resource, response->second);
     }
 
     return response;
@@ -613,7 +620,7 @@ optional<int64_t> OfflineDatabase::hasRegionResource(int64_t regionID, const Res
     auto response = hasInternal(resource);
 
     if (response) {
-        markUsed(regionID, resource);
+        markUsed(regionID, resource, *response);
     }
 
     return response;
@@ -621,7 +628,7 @@ optional<int64_t> OfflineDatabase::hasRegionResource(int64_t regionID, const Res
 
 uint64_t OfflineDatabase::putRegionResource(int64_t regionID, const Resource& resource, const Response& response) {
     uint64_t size = putInternal(resource, response, false).second;
-    bool previouslyUnused = markUsed(regionID, resource);
+    bool previouslyUnused = markUsed(regionID, resource, size);
 
     if (offlineMapboxTileCount
         && resource.kind == Resource::Kind::Tile
@@ -633,7 +640,7 @@ uint64_t OfflineDatabase::putRegionResource(int64_t regionID, const Resource& re
     return size;
 }
 
-bool OfflineDatabase::markUsed(int64_t regionID, const Resource& resource) {
+bool OfflineDatabase::markUsed(int64_t regionID, const Resource& resource, int64_t resourceSize) {
     if (resource.kind == Resource::Kind::Tile) {
         // clang-format off
         Statement insert = getStatement(
@@ -659,6 +666,19 @@ bool OfflineDatabase::markUsed(int64_t regionID, const Resource& resource) {
         if (db->changes() == 0) {
             return false;
         }
+
+        // clang-format off
+        Statement update = getStatement(
+            "UPDATE regions "
+            "  SET tiles_count = tiles_count + 1, "
+            "      tiles_size  = tiles_size + ?1 "
+            "WHERE id   = ?2 "
+            "  AND tiles_count is not null "
+            "  AND tiles_size is not null ");
+        // clang-format on
+        update->bind(1, resourceSize);
+        update->bind(2, regionID);
+        update->run();
 
         // clang-format off
         Statement select = getStatement(
@@ -754,14 +774,44 @@ std::pair<int64_t, int64_t> OfflineDatabase::getCompletedResourceCountAndSize(in
 std::pair<int64_t, int64_t> OfflineDatabase::getCompletedTileCountAndSize(int64_t regionID) {
     // clang-format off
     Statement stmt = getStatement(
+        "SELECT tiles_count, tiles_size "
+        "FROM regions "
+        "WHERE id = ?1 ");
+    // clang-format on
+    stmt->bind(1, regionID);
+    stmt->run();
+    optional<int64_t> count = stmt->get<optional<int64_t>>(0);
+    optional<int64_t> size = stmt->get<optional<int64_t>>(1);
+    
+    if (count && size) {
+        return { *count, *size };
+    }
+
+    // clang-format off
+    Statement countStatement = getStatement(
         "SELECT COUNT(*), SUM(LENGTH(data)) "
         "FROM region_tiles, tiles "
         "WHERE region_id = ?1 "
         "AND tile_id = tiles.id ");
     // clang-format on
-    stmt->bind(1, regionID);
-    stmt->run();
-    return { stmt->get<int64_t>(0), stmt->get<int64_t>(1) };
+    countStatement->bind(1, regionID);
+    countStatement->run();
+    int64_t fetchedCount = countStatement->get<int64_t>(0);
+    int64_t fetchedSize = countStatement->get<int64_t>(1);
+
+    // clang-format off
+    Statement update = getStatement(
+        "UPDATE regions "
+        "SET tiles_count = ?1,"
+        "    tiles_size  = ?2 "
+        "WHERE id = ?3 ");
+    // clang-format on
+    update->bind(1, fetchedCount);
+    update->bind(2, fetchedSize);
+    update->bind(3, regionID);
+    update->run();
+
+    return { fetchedCount, fetchedSize };
 }
 
 template <class T>
