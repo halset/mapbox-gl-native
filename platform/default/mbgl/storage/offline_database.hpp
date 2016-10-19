@@ -64,7 +64,7 @@ private:
     void removeExisting();
     void migrateToVersion3();
     void migrateToVersion5();
-    void migrateToVersion6();
+    void migrateToVersion600();
 
     class Statement {
     public:

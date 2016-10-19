@@ -50,8 +50,8 @@ void OfflineDatabase::ensureSchema() {
             case 2: migrateToVersion3(); // fall through
             case 3: // no-op and fall through
             case 4: migrateToVersion5(); // fall through
-            case 5: migrateToVersion6(); // fall through
-            case 6: return;
+            case 5: migrateToVersion600(); // fall through
+            case 600: return;
             default: throw std::runtime_error("unknown schema version");
             }
 
@@ -85,7 +85,7 @@ void OfflineDatabase::ensureSchema() {
         db->exec("PRAGMA journal_mode = DELETE");
         db->exec("PRAGMA synchronous = FULL");
         db->exec(schema);
-        db->exec("PRAGMA user_version = 6");
+        db->exec("PRAGMA user_version = 600");
     } catch (...) {
         Log::Error(Event::Database, "Unexpected error creating database schema: %s", util::toString(std::current_exception()).c_str());
         throw;
@@ -128,10 +128,10 @@ void OfflineDatabase::migrateToVersion5() {
     db->exec("PRAGMA user_version = 5");
 }
 
-void OfflineDatabase::migrateToVersion6() {
+void OfflineDatabase::migrateToVersion600() {
     db->exec("ALTER TABLE regions add tiles_count integer");
     db->exec("ALTER TABLE regions add tiles_size integer");
-    db->exec("PRAGMA user_version = 6");
+    db->exec("PRAGMA user_version = 600");
 }
     
 OfflineDatabase::Statement OfflineDatabase::getStatement(const char * sql) {
