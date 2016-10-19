@@ -642,6 +642,10 @@ uint64_t OfflineDatabase::putRegionResource(int64_t regionID, const Resource& re
 
 bool OfflineDatabase::markUsed(int64_t regionID, const Resource& resource, int64_t resourceSize) {
     if (resource.kind == Resource::Kind::Tile) {
+        
+        // transaction to make update of tiles_{count,size} more robust
+        mapbox::sqlite::Transaction transaction(*db, mapbox::sqlite::Transaction::Immediate);
+        
         // clang-format off
         Statement insert = getStatement(
             "INSERT OR IGNORE INTO region_tiles (region_id, tile_id) "
@@ -664,6 +668,7 @@ bool OfflineDatabase::markUsed(int64_t regionID, const Resource& resource, int64
         insert->run();
 
         if (db->changes() == 0) {
+            transaction.commit();
             return false;
         }
 
@@ -699,7 +704,9 @@ bool OfflineDatabase::markUsed(int64_t regionID, const Resource& resource, int64
         select->bind(4, tile.x);
         select->bind(5, tile.y);
         select->bind(6, tile.z);
-        return !select->run();
+        auto r = !select->run();
+        transaction.commit();
+        return r;
     } else {
         // clang-format off
         Statement insert = getStatement(
