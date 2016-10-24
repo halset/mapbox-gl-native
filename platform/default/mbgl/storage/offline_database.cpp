@@ -782,7 +782,8 @@ T OfflineDatabase::getPragma(const char * sql) {
 // delete an arbitrary number of old cache entries. The free pages approach saves
 // us from calling VACCUM or keeping a running total, which can be costly.
 bool OfflineDatabase::evict(uint64_t neededFreeSize) {
-    assert(neededFreeSize >= 0);
+    (void)neededFreeSize;
+    (void)maximumCacheSize;
     return true;
 }
 
