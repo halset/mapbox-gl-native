@@ -782,54 +782,7 @@ T OfflineDatabase::getPragma(const char * sql) {
 // delete an arbitrary number of old cache entries. The free pages approach saves
 // us from calling VACCUM or keeping a running total, which can be costly.
 bool OfflineDatabase::evict(uint64_t neededFreeSize) {
-    uint64_t pageSize = getPragma<int64_t>("PRAGMA page_size");
-    uint64_t pageCount = getPragma<int64_t>("PRAGMA page_count");
-
-    auto usedSize = [&] {
-        return pageSize * (pageCount - getPragma<int64_t>("PRAGMA freelist_count"));
-    };
-
-    // The addition of pageSize is a fudge factor to account for non `data` column
-    // size, and because pages can get fragmented on the database.
-    while (usedSize() + neededFreeSize + pageSize > maximumCacheSize) {
-        // clang-format off
-        Statement stmt1 = getStatement(
-            "DELETE FROM resources "
-            "WHERE id IN ( "
-            "  SELECT id FROM resources "
-            "  LEFT JOIN region_resources "
-            "  ON resource_id = resources.id "
-            "  WHERE resource_id IS NULL "
-            "  ORDER BY accessed ASC LIMIT ?1 "
-            ") ");
-        // clang-format on
-        stmt1->bind(1, 50);
-        stmt1->run();
-        uint64_t changes1 = db->changes();
-
-        // clang-format off
-        Statement stmt2 = getStatement(
-            "DELETE FROM tiles "
-            "WHERE id IN ( "
-            "  SELECT id FROM tiles "
-            "  LEFT JOIN region_tiles "
-            "  ON tile_id = tiles.id "
-            "  WHERE tile_id IS NULL "
-            "  ORDER BY accessed ASC LIMIT ?1 "
-            ") ");
-        // clang-format on
-        stmt2->bind(1, 50);
-        stmt2->run();
-        uint64_t changes2 = db->changes();
-
-        // The cached value of offlineTileCount does not need to be updated
-        // here because only non-offline tiles can be removed by eviction.
-
-        if (changes1 == 0 && changes2 == 0) {
-            return false;
-        }
-    }
-
+    assert(neededFreeSize >= 0);
     return true;
 }
 
