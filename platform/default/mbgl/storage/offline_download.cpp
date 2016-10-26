@@ -222,7 +222,7 @@ void OfflineDownload::continueDownload() {
         return;
     }
 
-    while (!resourcesRemaining.empty() && requests.size() < HTTPFileSource::maximumConcurrentRequests()) {
+    while (!resourcesRemaining.empty() && requests.size() < (HTTPFileSource::maximumConcurrentRequests() / 4)) {
         ensureResource(resourcesRemaining.front());
         resourcesRemaining.pop_front();
     }
