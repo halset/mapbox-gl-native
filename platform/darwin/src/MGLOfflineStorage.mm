@@ -9,6 +9,8 @@
 #import "NSValue+MGLAdditions.h"
 
 #include <mbgl/util/string.hpp>
+#include <mbgl/storage/resource.hpp>
+#include <mbgl/storage/response.hpp>
 
 static NSString * const MGLOfflineStorageFileName = @"cache.db";
 static NSString * const MGLOfflineStorageFileName3_2_0_beta_1 = @"offline.db";
@@ -302,6 +304,44 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
 
 - (void)setMaximumAllowedMapboxTiles:(uint64_t)maximumCount {
     _mbglFileSource->setOfflineMapboxTileCountLimit(maximumCount);
+}
+
+-(void)putTileWithUrlTemplate:(NSString *)urlTemplate pixelRatio:(float)pixelRatio x:(int32_t)x y:(int32_t)y z:(int8_t)z data:(NSData *)data completionHandler:(void (^)(NSError * _Nullable error))completion {
+    mbgl::Resource resource = mbgl::Resource::tile([urlTemplate UTF8String], pixelRatio, x, y, z, mbgl::Tileset::Scheme::XYZ);
+    mbgl::Response response = mbgl::Response();
+    response.data = std::make_shared<std::string>(static_cast<const char*>(data.bytes), data.length);
+    _mbglFileSource->startPut(resource, response, [&, completion](std::exception_ptr exception) {
+        NSError *error;
+        if (exception) {
+            error = [NSError errorWithDomain:MGLErrorDomain code:-1 userInfo:@{
+                NSLocalizedDescriptionKey: @(mbgl::util::toString(exception).c_str()),
+            }];
+        }
+        if (completion) {
+            dispatch_async(dispatch_get_main_queue(), [&, completion, error](void) {
+                completion(error);
+            });
+        }
+    });
+}
+
+-(void)putResourceWithUrl:(NSString *)url data:(NSData *)data completionHandler:(void (^)(NSError * _Nullable error))completion {
+    mbgl::Resource resource = mbgl::Resource(mbgl::Resource::Kind::Unknown, [url UTF8String]);
+    mbgl::Response response = mbgl::Response();
+    response.data = std::make_shared<std::string>(static_cast<const char*>(data.bytes), data.length);
+    _mbglFileSource->startPut(resource, response, [&, completion](std::exception_ptr exception) {
+        NSError *error;
+        if (exception) {
+            error = [NSError errorWithDomain:MGLErrorDomain code:-1 userInfo:@{
+                                                                               NSLocalizedDescriptionKey: @(mbgl::util::toString(exception).c_str()),
+                                                                               }];
+        }
+        if (completion) {
+            dispatch_async(dispatch_get_main_queue(), [&, completion, error](void) {
+                completion(error);
+            });
+        }
+    });
 }
 
 #pragma mark -
