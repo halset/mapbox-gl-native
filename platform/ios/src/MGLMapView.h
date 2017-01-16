@@ -182,6 +182,8 @@ IB_DESIGNABLE
  */
 @property (nonatomic, readonly) UIImageView *compassView;
 
+@property (nonatomic, getter=isCompassAlwaysVisible) BOOL compassAlwaysVisible;
+
 /**
  The Mapbox logo, positioned in the lower-left corner.
  
