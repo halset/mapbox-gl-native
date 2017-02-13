@@ -2,9 +2,9 @@
 
 #include <mbgl/benchmark/util.hpp>
 #include <mbgl/map/map.hpp>
-#include <mbgl/platform/default/headless_backend.hpp>
-#include <mbgl/platform/default/offscreen_view.hpp>
-#include <mbgl/platform/default/thread_pool.hpp>
+#include <mbgl/gl/headless_backend.hpp>
+#include <mbgl/gl/offscreen_view.hpp>
+#include <mbgl/util/default_thread_pool.hpp>
 #include <mbgl/sprite/sprite_image.hpp>
 #include <mbgl/storage/default_file_source.hpp>
 #include <mbgl/storage/network_status.hpp>
@@ -34,10 +34,10 @@ public:
 
     util::RunLoop loop;
     HeadlessBackend backend;
-    OffscreenView view{ backend.getContext(), {{ 1000, 1000 }} };
+    OffscreenView view{ backend.getContext(), { 1000, 1000 } };
     DefaultFileSource fileSource{ "benchmark/fixtures/api/cache.db", "." };
     ThreadPool threadPool{ 4 };
-    Map map{ backend, view.getSize(), 1, fileSource, threadPool, MapMode::Still };
+    Map map{ backend, view.size, 1, fileSource, threadPool, MapMode::Still };
     ScreenBox box{{ 0, 0 }, { 1000, 1000 }};
 };
 

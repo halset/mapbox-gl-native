@@ -8,9 +8,7 @@
 
 #include <mbgl/util/run_loop.hpp>
 #include <mbgl/util/thread_context.hpp>
-#include <mbgl/platform/platform.hpp>
-
-#include <pthread.h>
+#include <mbgl/util/platform.hpp>
 
 namespace mbgl {
 namespace util {

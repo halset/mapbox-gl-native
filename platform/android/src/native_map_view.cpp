@@ -10,59 +10,24 @@
 
 #include <sys/system_properties.h>
 
-#include <GLES2/gl2.h>
-
-#include <mbgl/platform/platform.hpp>
-#include <mbgl/platform/event.hpp>
-#include <mbgl/platform/log.hpp>
+#include <mbgl/util/platform.hpp>
+#include <mbgl/util/event.hpp>
+#include <mbgl/util/logging.hpp>
 #include <mbgl/gl/extension.hpp>
-#include <mbgl/gl/gl.hpp>
 #include <mbgl/gl/context.hpp>
 #include <mbgl/util/constants.hpp>
 #include <mbgl/util/image.hpp>
 
+#include "bitmap.hpp"
+
 namespace mbgl {
 namespace android {
-
-void log_egl_string(EGLDisplay display, EGLint name, const char *label) {
-    const char *str = eglQueryString(display, name);
-    if (str == nullptr) {
-        mbgl::Log::Error(mbgl::Event::OpenGL, "eglQueryString(%d) returned error %d", name,
-                         eglGetError());
-        throw std::runtime_error("eglQueryString() failed");
-    } else {
-        char buf[513];
-        for (int len = std::strlen(str), pos = 0; len > 0; len -= 512, pos += 512) {
-            strncpy(buf, str + pos, 512);
-            buf[512] = 0;
-            mbgl::Log::Info(mbgl::Event::OpenGL, "EGL %s: %s", label, buf);
-        }
-    }
-}
-
-void log_gl_string(GLenum name, const char *label) {
-    const GLubyte *str = glGetString(name);
-    if (str == nullptr) {
-        mbgl::Log::Error(mbgl::Event::OpenGL, "glGetString(%d) returned error %d", name,
-                         glGetError());
-        throw std::runtime_error("glGetString() failed");
-    } else {
-        char buf[513];
-        for (int len = std::strlen(reinterpret_cast<const char *>(str)), pos = 0; len > 0;
-             len -= 512, pos += 512) {
-            strncpy(buf, reinterpret_cast<const char *>(str) + pos, 512);
-            buf[512] = 0;
-            mbgl::Log::Info(mbgl::Event::OpenGL, "GL %s: %s", label, buf);
-        }
-    }
-}
 
 NativeMapView::NativeMapView(JNIEnv *env_, jobject obj_, float pixelRatio, int availableProcessors_, size_t totalMemory_)
     : env(env_),
       availableProcessors(availableProcessors_),
       totalMemory(totalMemory_),
       threadPool(4) {
-    mbgl::Log::Debug(mbgl::Event::Android, "NativeMapView::NativeMapView");
 
     assert(env_ != nullptr);
     assert(obj_ != nullptr);
@@ -83,15 +48,14 @@ NativeMapView::NativeMapView(JNIEnv *env_, jobject obj_, float pixelRatio, int a
         mbgl::android::apkPath);
 
     map = std::make_unique<mbgl::Map>(
-        *this,
-        std::array<uint16_t, 2>{{ static_cast<uint16_t>(width), static_cast<uint16_t>(height) }},
+        *this, mbgl::Size{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) },
         pixelRatio, *fileSource, threadPool, MapMode::Continuous);
 
     float zoomFactor   = map->getMaxZoom() - map->getMinZoom() + 1;
     float cpuFactor    = availableProcessors;
     float memoryFactor = static_cast<float>(totalMemory) / 1000.0f / 1000.0f / 1000.0f;
-    float sizeFactor   = (static_cast<float>(map->getWidth())  / mbgl::util::tileSize) *
-                         (static_cast<float>(map->getHeight()) / mbgl::util::tileSize);
+    float sizeFactor   = (static_cast<float>(map->getSize().width)  / mbgl::util::tileSize) *
+                         (static_cast<float>(map->getSize().height) / mbgl::util::tileSize);
 
     size_t cacheSize = zoomFactor * cpuFactor * memoryFactor * sizeFactor * 0.5f;
 
@@ -99,7 +63,6 @@ NativeMapView::NativeMapView(JNIEnv *env_, jobject obj_, float pixelRatio, int a
 }
 
 NativeMapView::~NativeMapView() {
-    mbgl::Log::Debug(mbgl::Event::Android, "NativeMapView::~NativeMapView");
     terminateContext();
     destroySurface();
     terminateDisplay();
@@ -117,14 +80,20 @@ NativeMapView::~NativeMapView() {
     vm = nullptr;
 }
 
+mbgl::Size NativeMapView::getFramebufferSize() const {
+    return { static_cast<uint32_t>(fbWidth), static_cast<uint32_t>(fbHeight) };
+}
+
 void NativeMapView::updateViewBinding() {
     getContext().bindFramebuffer.setCurrentValue(0);
-    getContext().viewport.setCurrentValue({ 0, 0, static_cast<uint16_t>(fbWidth), static_cast<uint16_t>(fbHeight) });
+    assert(mbgl::gl::value::BindFramebuffer::Get() == getContext().bindFramebuffer.getCurrentValue());
+    getContext().viewport.setCurrentValue({ 0, 0, getFramebufferSize() });
+    assert(mbgl::gl::value::Viewport::Get() == getContext().viewport.getCurrentValue());
 }
 
 void NativeMapView::bind() {
     getContext().bindFramebuffer = 0;
-    getContext().viewport = { 0, 0, static_cast<uint16_t>(fbWidth), static_cast<uint16_t>(fbHeight) };
+    getContext().viewport = { 0, 0, getFramebufferSize() };
 }
 
 void NativeMapView::activate() {
@@ -192,6 +161,11 @@ void NativeMapView::invalidate() {
 void NativeMapView::render() {
     BackendScope guard(*this);
 
+    if (framebufferSizeChanged) {
+        getContext().viewport = { 0, 0, getFramebufferSize() };
+        framebufferSizeChanged = false;
+    }
+
     updateViewBinding();
     map->render(*this);
 
@@ -199,26 +173,11 @@ void NativeMapView::render() {
          snapshot = false;
 
          // take snapshot
-         const unsigned int w = fbWidth;
-         const unsigned int h = fbHeight;
-         mbgl::PremultipliedImage image { static_cast<uint16_t>(w), static_cast<uint16_t>(h) };
-         MBGL_CHECK_ERROR(glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, image.data.get()));
-         const size_t stride = image.stride();
-         auto tmp = std::make_unique<uint8_t[]>(stride);
-         uint8_t *rgba = image.data.get();
-         for (int i = 0, j = h - 1; i < j; i++, j--) {
-            std::memcpy(tmp.get(), rgba + i * stride, stride);
-            std::memcpy(rgba + i * stride, rgba + j * stride, stride);
-            std::memcpy(rgba + j * stride, tmp.get(), stride);
-         }
-
-         // encode and convert to jbytes
-         std::string string = encodePNG(image);
-         jbyteArray arr = env->NewByteArray(string.length());
-         env->SetByteArrayRegion(arr,0,string.length(),(jbyte*)string.c_str());
+         auto image = getContext().readFramebuffer<mbgl::PremultipliedImage>(getFramebufferSize());
+         auto bitmap = Bitmap::CreateBitmap(*env, std::move(image));
 
          // invoke Mapview#OnSnapshotReady
-         env->CallVoidMethod(obj, onSnapshotReadyId, arr);
+         env->CallVoidMethod(obj, onSnapshotReadyId, jni::Unwrap(*bitmap));
          if (env->ExceptionCheck()) {
              env->ExceptionDescribe();
          }
@@ -241,16 +200,7 @@ mbgl::Map &NativeMapView::getMap() { return *map; }
 
 mbgl::DefaultFileSource &NativeMapView::getFileSource() { return *fileSource; }
 
-bool NativeMapView::inEmulator() {
-    // Detect if we are in emulator
-    char prop[PROP_VALUE_MAX];
-    __system_property_get("ro.kernel.qemu", prop);
-    return strtol(prop, nullptr, 0) == 1;
-}
-
 void NativeMapView::initializeDisplay() {
-    mbgl::Log::Debug(mbgl::Event::Android, "NativeMapView::initializeDisplay");
-
     assert(display == EGL_NO_DISPLAY);
     assert(config == nullptr);
     assert(format < 0);
@@ -272,27 +222,39 @@ void NativeMapView::initializeDisplay() {
         throw std::runtime_error("EGL version is too low");
     }
 
-    log_egl_string(display, EGL_VENDOR, "Vendor");
-    log_egl_string(display, EGL_VERSION, "Version");
-    log_egl_string(display, EGL_CLIENT_APIS, "Client APIs");
-    log_egl_string(display, EGL_EXTENSIONS, "Client Extensions");
+    // Detect if we are in emulator.
+    const bool inEmulator = []() {
+        char prop[PROP_VALUE_MAX];
+        __system_property_get("ro.kernel.qemu", prop);
+        return strtol(prop, nullptr, 0) == 1;
+    }();
 
-    // Detect if we are in emulator
-    if (inEmulator()) {
-        mbgl::Log::Warning(mbgl::Event::Android, "In emulator! Enabling hacks :-(");
+    if (inEmulator) {
+        // XXX https://code.google.com/p/android/issues/detail?id=78977
+        mbgl::Log::Warning(mbgl::Event::Android, "Running SDK in emulator!");
+    }
+
+    if (!eglBindAPI(EGL_OPENGL_ES_API)) {
+        mbgl::Log::Error(mbgl::Event::OpenGL, "eglBindAPI(EGL_OPENGL_ES_API) returned error %d", eglGetError());
+        throw std::runtime_error("eglBindAPI() failed");
     }
 
     // Get all configs at least RGB 565 with 16 depth and 8 stencil
     EGLint configAttribs[] = {
-        EGL_CONFIG_CAVEAT,                               EGL_NONE,           EGL_RENDERABLE_TYPE,
-        EGL_OPENGL_ES2_BIT,                              EGL_SURFACE_TYPE,   EGL_WINDOW_BIT,
-        EGL_BUFFER_SIZE,                                 16,                 EGL_RED_SIZE,
-        5,                                               EGL_GREEN_SIZE,     6,
-        EGL_BLUE_SIZE,                                   5,                  EGL_DEPTH_SIZE,
-        16,                                              EGL_STENCIL_SIZE,   8,
-        (inEmulator() ? EGL_NONE : EGL_CONFORMANT),        EGL_OPENGL_ES2_BIT, // Ugly hack
-        (inEmulator() ? EGL_NONE : EGL_COLOR_BUFFER_TYPE), EGL_RGB_BUFFER,     // Ugly hack
-        EGL_NONE};
+        EGL_CONFIG_CAVEAT,                               EGL_NONE,
+        EGL_RENDERABLE_TYPE,                             EGL_OPENGL_ES2_BIT,
+        EGL_SURFACE_TYPE,                                EGL_WINDOW_BIT,
+        EGL_BUFFER_SIZE,                                 16,
+        EGL_RED_SIZE,                                    5,
+        EGL_GREEN_SIZE,                                  6,
+        EGL_BLUE_SIZE,                                   5,
+        EGL_DEPTH_SIZE,                                  16,
+        EGL_STENCIL_SIZE,                                8,
+        (inEmulator ? EGL_NONE : EGL_CONFORMANT),        EGL_OPENGL_ES2_BIT,
+        (inEmulator ? EGL_NONE : EGL_COLOR_BUFFER_TYPE), EGL_RGB_BUFFER,
+        EGL_NONE
+    };
+
     EGLint numConfigs;
     if (!eglChooseConfig(display, configAttribs, nullptr, 0, &numConfigs)) {
         mbgl::Log::Error(mbgl::Event::OpenGL, "eglChooseConfig(NULL) returned error %d",
@@ -321,12 +283,9 @@ void NativeMapView::initializeDisplay() {
                          eglGetError());
         throw std::runtime_error("eglGetConfigAttrib() failed");
     }
-    mbgl::Log::Info(mbgl::Event::OpenGL, "Chosen window format is %d", format);
 }
 
 void NativeMapView::terminateDisplay() {
-    mbgl::Log::Debug(mbgl::Event::Android, "NativeMapView::terminateDisplay");
-
     if (display != EGL_NO_DISPLAY) {
         // Destroy the surface first, if it still exists. This call needs a valid surface.
         if (surface != EGL_NO_SURFACE) {
@@ -357,8 +316,6 @@ void NativeMapView::terminateDisplay() {
 }
 
 void NativeMapView::initializeContext() {
-    mbgl::Log::Debug(mbgl::Event::Android, "NativeMapView::initializeContext");
-
     assert(display != EGL_NO_DISPLAY);
     assert(context == EGL_NO_CONTEXT);
     assert(config != nullptr);
@@ -373,7 +330,6 @@ void NativeMapView::initializeContext() {
 }
 
 void NativeMapView::terminateContext() {
-    mbgl::Log::Debug(mbgl::Event::Android, "NativeMapView::terminateContext");
     if (display != EGL_NO_DISPLAY) {
 
         if (!eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT)) {
@@ -395,8 +351,6 @@ void NativeMapView::terminateContext() {
 }
 
 void NativeMapView::createSurface(ANativeWindow *window_) {
-    mbgl::Log::Debug(mbgl::Event::Android, "NativeMapView::createSurface");
-
     assert(window == nullptr);
     assert(window_ != nullptr);
     window = window_;
@@ -427,16 +381,6 @@ void NativeMapView::createSurface(ANativeWindow *window_) {
             throw std::runtime_error("eglMakeCurrent() failed");
         }
 
-        log_gl_string(GL_VENDOR, "Vendor");
-        log_gl_string(GL_RENDERER, "Renderer");
-        log_gl_string(GL_VERSION, "Version");
-        if (!inEmulator()) {
-            log_gl_string(GL_SHADING_LANGUAGE_VERSION,
-                        "SL Version"); // In the emulator this returns NULL with error code 0?
-                                        // https://code.google.com/p/android/issues/detail?id=78977
-        }
-
-        log_gl_string(GL_EXTENSIONS, "Extensions");
         mbgl::gl::InitializeExtensions([] (const char * name) {
              return reinterpret_cast<mbgl::gl::glProc>(eglGetProcAddress(name));
         });
@@ -444,8 +388,6 @@ void NativeMapView::createSurface(ANativeWindow *window_) {
 }
 
 void NativeMapView::destroySurface() {
-    mbgl::Log::Debug(mbgl::Event::Android, "NativeMapView::destroySurface");
-
     if (surface != EGL_NO_SURFACE) {
         if (!eglDestroySurface(display, surface)) {
             mbgl::Log::Error(mbgl::Event::OpenGL, "eglDestroySurface() returned error %d",
@@ -501,13 +443,9 @@ typedef enum {
 typedef std::tuple<BufferFormat, DepthStencilFormat, bool, bool, int, EGLConfig> ConfigProperties;
 
 EGLConfig NativeMapView::chooseConfig(const EGLConfig configs[], EGLint numConfigs) {
-    mbgl::Log::Info(mbgl::Event::OpenGL, "Found %d configs", numConfigs);
-
     // Create a list of configs that pass our filters
     std::list<ConfigProperties> configList;
     for (int i = 0; i < numConfigs; i++) {
-        mbgl::Log::Info(mbgl::Event::OpenGL, "Config %d:", i);
-
         EGLint caveat, conformant, bits, red, green, blue, alpha, alphaMask, depth, stencil,
             sampleBuffers, samples;
 
@@ -588,19 +526,6 @@ EGLConfig NativeMapView::chooseConfig(const EGLConfig configs[], EGLint numConfi
             throw std::runtime_error("eglGetConfigAttrib() failed");
         }
 
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Caveat: %d", caveat);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Conformant: %d", conformant);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Color: %d", bits);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Red: %d", red);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Green: %d", green);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Blue: %d", blue);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Alpha: %d", alpha);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Alpha mask: %d", alphaMask);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Depth: %d", depth);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Stencil: %d", stencil);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Sample buffers: %d", sampleBuffers);
-        mbgl::Log::Info(mbgl::Event::OpenGL, "...Samples: %d", samples);
-
         bool configOk = true;
         configOk &= (depth == 24) || (depth == 16);
         configOk &= stencil == 8;
@@ -651,10 +576,7 @@ EGLConfig NativeMapView::chooseConfig(const EGLConfig configs[], EGLint numConfi
     configList.sort();
     bool isConformant = !std::get<2>(configList.front());
     bool isCaveat = std::get<3>(configList.front());
-    int configNum = std::get<4>(configList.front());
     EGLConfig configId = std::get<5>(configList.front());
-
-    mbgl::Log::Info(mbgl::Event::OpenGL, "Chosen config is %d", configNum);
 
     if (isCaveat) {
         mbgl::Log::Warning(mbgl::Event::OpenGL, "Chosen config has a caveat.");
@@ -677,8 +599,6 @@ void NativeMapView::notifyMapChange(mbgl::MapChange change) {
 }
 
 void NativeMapView::enableFps(bool enable) {
-    mbgl::Log::Debug(mbgl::Event::Android, "NativeMapView::enableFps()");
-
     fpsEnabled = enable;
 }
 
@@ -714,12 +634,13 @@ void NativeMapView::updateFps() {
 void NativeMapView::resizeView(int w, int h) {
     width = w;
     height = h;
-    map->setSize({{ static_cast<uint16_t>(width), static_cast<uint16_t>(height) }});
+    map->setSize({ static_cast<uint32_t>(width), static_cast<uint32_t>(height) });
 }
 
 void NativeMapView::resizeFramebuffer(int w, int h) {
     fbWidth = w;
     fbHeight = h;
+    framebufferSizeChanged = true;
     invalidate();
 }
 

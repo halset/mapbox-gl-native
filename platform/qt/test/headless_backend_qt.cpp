@@ -1,7 +1,5 @@
-#include <mbgl/platform/default/headless_backend.hpp>
-#include <mbgl/platform/default/headless_display.hpp>
+#include <mbgl/gl/headless_backend.hpp>
 
-#include <QApplication>
 #include <QGLContext>
 #include <QGLWidget>
 
@@ -9,7 +7,21 @@
 #include <QOpenGLContext>
 #endif
 
+#include <cassert>
+
 namespace mbgl {
+
+struct QtImpl : public HeadlessBackend::Impl {
+    void activateContext() final {
+        widget.makeCurrent();
+    }
+
+    void deactivateContext() final {
+        widget.doneCurrent();
+    }
+
+    QGLWidget widget;
+};
 
 gl::glProc HeadlessBackend::initializeExtension(const char* name) {
 #if QT_VERSION >= 0x050000
@@ -21,26 +33,13 @@ gl::glProc HeadlessBackend::initializeExtension(const char* name) {
 #endif
 }
 
+bool HeadlessBackend::hasDisplay() {
+    return true;
+};
+
 void HeadlessBackend::createContext() {
-    static const char* argv[] = { "mbgl" };
-    static int argc = 1;
-    static auto* app = new QApplication(argc, const_cast<char**>(argv));
-
-    Q_UNUSED(app);
-
-    glContext = new QGLWidget;
-}
-
-void HeadlessBackend::destroyContext() {
-    delete glContext;
-}
-
-void HeadlessBackend::activateContext() {
-    glContext->makeCurrent();
-}
-
-void HeadlessBackend::deactivateContext() {
-    glContext->doneCurrent();
+    assert(!hasContext());
+    impl.reset(new QtImpl);
 }
 
 } // namespace mbgl

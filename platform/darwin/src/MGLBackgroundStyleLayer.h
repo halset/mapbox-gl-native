@@ -1,6 +1,7 @@
-// This file is generated. 
+// This file is generated.
 // Edit platform/darwin/scripts/generate-style-code.js, then run `make style-code-darwin`.
 
+#import "MGLFoundation.h"
 #import "MGLStyleValue.h"
 #import "MGLStyleLayer.h"
 
@@ -20,6 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
  If the background style layer is transparent or omitted from the style, any
  portion of the map view that does not show another style layer is transparent.
  */
+MGL_EXPORT
 @interface MGLBackgroundStyleLayer : MGLStyleLayer
 
 - (instancetype)initWithIdentifier:(NSString *)identifier NS_DESIGNATED_INITIALIZER;
@@ -36,6 +38,13 @@ NS_ASSUME_NONNULL_BEGIN
  
  This property is only applied to the style if `backgroundPattern` is set to
  `nil`. Otherwise, it is ignored.
+ 
+ You can set this property to an instance of:
+ 
+ * `MGLStyleConstantValue`
+ * `MGLCameraStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<UIColor *> *backgroundColor;
 #else
@@ -48,6 +57,13 @@ NS_ASSUME_NONNULL_BEGIN
  
  This property is only applied to the style if `backgroundPattern` is set to
  `nil`. Otherwise, it is ignored.
+ 
+ You can set this property to an instance of:
+ 
+ * `MGLStyleConstantValue`
+ * `MGLCameraStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSColor *> *backgroundColor;
 #endif
@@ -58,6 +74,13 @@ NS_ASSUME_NONNULL_BEGIN
  The default value of this property is an `MGLStyleValue` object containing an
  `NSNumber` object containing the float `1`. Set this property to `nil` to reset
  it to the default value.
+ 
+ You can set this property to an instance of:
+ 
+ * `MGLStyleConstantValue`
+ * `MGLCameraStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *backgroundOpacity;
 
@@ -65,6 +88,12 @@ NS_ASSUME_NONNULL_BEGIN
  Name of image in style images to use for drawing an image background. For
  seamless patterns, image width and height must be a factor of two (2, 4, 8,
  ..., 512).
+ 
+ You can set this property to an instance of:
+ 
+ * `MGLStyleConstantValue`
+ * `MGLCameraStyleFunction` with an interpolation mode of
+ `MGLInterpolationModeInterval`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSString *> *backgroundPattern;
 

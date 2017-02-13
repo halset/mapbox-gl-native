@@ -6,7 +6,7 @@
 #include <mbgl/style/update_parameters.hpp>
 #include <mbgl/style/query_parameters.hpp>
 #include <mbgl/text/placement_config.hpp>
-#include <mbgl/platform/log.hpp>
+#include <mbgl/util/logging.hpp>
 #include <mbgl/math/clamp.hpp>
 #include <mbgl/util/tile_cover.hpp>
 #include <mbgl/util/enum.hpp>
@@ -70,11 +70,13 @@ void Source::Impl::startRender(algorithm::ClipIDGenerator& generator,
 void Source::Impl::finishRender(Painter& painter) {
     for (auto& pair : renderTiles) {
         auto& tile = pair.second;
-        painter.renderTileDebug(tile);
+        if (tile.used) {
+            painter.renderTileDebug(tile);
+        }
     }
 }
 
-const std::map<UnwrappedTileID, RenderTile>& Source::Impl::getRenderTiles() const {
+std::map<UnwrappedTileID, RenderTile>& Source::Impl::getRenderTiles() {
     return renderTiles;
 }
 
@@ -137,15 +139,28 @@ void Source::Impl::updateTiles(const UpdateParameters& parameters) {
     algorithm::updateRenderables(getTileFn, createTileFn, retainTileFn, renderTileFn,
                                  idealTiles, zoomRange, tileZoom);
 
-    if (type != SourceType::Annotations && cache.getSize() == 0) {
+    if (type != SourceType::Annotations) {
         size_t conservativeCacheSize =
-            std::max((float)parameters.transformState.getWidth() / util::tileSize, 1.0f) *
-            std::max((float)parameters.transformState.getHeight() / util::tileSize, 1.0f) *
+            std::max((float)parameters.transformState.getSize().width / tileSize, 1.0f) *
+            std::max((float)parameters.transformState.getSize().height / tileSize, 1.0f) *
             (parameters.transformState.getMaxZoom() - parameters.transformState.getMinZoom() + 1) *
             0.5;
         cache.setSize(conservativeCacheSize);
     }
 
+    removeStaleTiles(retain);
+
+    const PlacementConfig config { parameters.transformState.getAngle(),
+                                   parameters.transformState.getPitch(),
+                                   parameters.debugOptions & MapDebugOptions::Collision };
+
+    for (auto& pair : tiles) {
+        pair.second->setPlacementConfig(config);
+    }
+}
+
+// Moves all tiles to the cache except for those specified in the retain set.
+void Source::Impl::removeStaleTiles(const std::set<OverscaledTileID>& retain) {
     // Remove stale tiles. This goes through the (sorted!) tiles map and retain set in lockstep
     // and removes items from tiles that don't have the corresponding key in the retain set.
     auto tilesIt = tiles.begin();
@@ -162,13 +177,12 @@ void Source::Impl::updateTiles(const UpdateParameters& parameters) {
             ++retainIt;
         }
     }
+}
 
-    const PlacementConfig config { parameters.transformState.getAngle(),
-                                   parameters.transformState.getPitch(),
-                                   parameters.debugOptions & MapDebugOptions::Collision };
-
-    for (auto& pair : tiles) {
-        pair.second->setPlacementConfig(config);
+void Source::Impl::removeTiles() {
+    renderTiles.clear();
+    if (!tiles.empty()) {
+        removeStaleTiles({});
     }
 }
 
@@ -196,16 +210,15 @@ std::unordered_map<std::string, std::vector<Feature>> Source::Impl::queryRendere
 
     for (const auto& p : parameters.geometry) {
         queryGeometry.push_back(TileCoordinate::fromScreenCoordinate(
-            parameters.transformState, 0, { p.x, parameters.transformState.getHeight() - p.y }).p);
+            parameters.transformState, 0, { p.x, parameters.transformState.getSize().height - p.y }).p);
     }
 
     mapbox::geometry::box<double> box = mapbox::geometry::envelope(queryGeometry);
 
 
     auto sortRenderTiles = [](const RenderTile& a, const RenderTile& b) {
-        return a.id.canonical.z != b.id.canonical.z ? a.id.canonical.z < b.id.canonical.z :
-               a.id.canonical.y != b.id.canonical.y ? a.id.canonical.y < b.id.canonical.y :
-               a.id.wrap != b.id.wrap ? a.id.wrap < b.id.wrap : a.id.canonical.x < b.id.canonical.x;
+        return std::tie(a.id.canonical.z, a.id.canonical.y, a.id.wrap, a.id.canonical.x) <
+            std::tie(b.id.canonical.z, b.id.canonical.y, b.id.wrap, b.id.canonical.x);
     };
     std::vector<std::reference_wrapper<const RenderTile>> sortedTiles;
     std::transform(renderTiles.cbegin(), renderTiles.cend(), std::back_inserter(sortedTiles),

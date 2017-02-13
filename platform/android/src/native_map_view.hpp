@@ -4,7 +4,7 @@
 #include <mbgl/map/view.hpp>
 #include <mbgl/map/backend.hpp>
 #include <mbgl/util/noncopyable.hpp>
-#include <mbgl/platform/default/thread_pool.hpp>
+#include <mbgl/util/default_thread_pool.hpp>
 #include <mbgl/storage/default_file_source.hpp>
 
 #include <string>
@@ -20,6 +20,7 @@ public:
     NativeMapView(JNIEnv *env, jobject obj, float pixelRatio, int availableProcessors, size_t totalMemory);
     virtual ~NativeMapView();
 
+    mbgl::Size getFramebufferSize() const;
     void updateViewBinding();
     void bind() override;
 
@@ -58,8 +59,6 @@ protected:
 private:
     EGLConfig chooseConfig(const EGLConfig configs[], EGLint numConfigs);
 
-    bool inEmulator();
-
 private:
     JavaVM *vm = nullptr;
     JNIEnv *env = nullptr;
@@ -91,6 +90,7 @@ private:
     int height = 0;
     int fbWidth = 0;
     int fbHeight = 0;
+    bool framebufferSizeChanged = true;
 
     int availableProcessors = 0;
     size_t totalMemory = 0;
