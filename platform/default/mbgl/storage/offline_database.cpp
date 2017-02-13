@@ -49,6 +49,7 @@ void OfflineDatabase::ensureSchema() {
             case 2: migrateToVersion3(); // fall through
             case 3: // no-op and fall through
             case 4: migrateToVersion5(); // fall through
+            case 600: migrateFromVersion600ToVersion5();
             case 5: return;
             default: throw std::runtime_error("unknown schema version");
             }
@@ -123,6 +124,10 @@ void OfflineDatabase::migrateToVersion3() {
 void OfflineDatabase::migrateToVersion5() {
     db->exec("PRAGMA journal_mode = DELETE");
     db->exec("PRAGMA synchronous = FULL");
+    db->exec("PRAGMA user_version = 5");
+}
+
+void OfflineDatabase::migrateFromVersion600ToVersion5() {
     db->exec("PRAGMA user_version = 5");
 }
 
