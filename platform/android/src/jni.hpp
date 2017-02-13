@@ -24,5 +24,7 @@ extern jmethodID onSnapshotReadyId;
 extern bool attach_jni_thread(JavaVM* vm, JNIEnv** env, std::string threadName);
 extern void detach_jni_thread(JavaVM* vm, JNIEnv** env, bool detach);
 
-}
-}
+extern void registerNatives(JavaVM* vm);
+
+} // namespace android
+} // namespace mbgl

@@ -48,6 +48,7 @@ public:
     virtual Bucket* getBucket(const style::Layer&) = 0;
 
     virtual void setPlacementConfig(const PlacementConfig&) {}
+    virtual void symbolDependenciesChanged() {};
     virtual void redoLayout() {}
 
     virtual void queryRenderedFeatures(
@@ -73,9 +74,6 @@ public:
 
     bool isComplete() const {
         return availableData == DataAvailability::All;
-    }
-    bool isIncomplete() const {
-        return availableData == DataAvailability::Some;
     }
 
     void dumpDebugLogs() const;

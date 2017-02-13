@@ -1,4 +1,4 @@
-// This file is generated. Edit android/platform/scripts/generate-style-code.js, then run `make style-code-android`.
+// This file is generated. Edit android/platform/scripts/generate-style-code.js, then run `make android-style-code`.
 
 #include "fill_layer.hpp"
 
@@ -71,12 +71,12 @@ namespace android {
     }
 
     void FillLayer::registerNative(jni::JNIEnv& env) {
-        //Lookup the class
+        // Lookup the class
         FillLayer::javaClass = *jni::Class<FillLayer>::Find(env).NewGlobalRef(env).release();
 
         #define METHOD(MethodPtr, name) jni::MakeNativePeerMethod<decltype(MethodPtr), (MethodPtr)>(name)
 
-        //Register the peer
+        // Register the peer
         jni::RegisterNativePeer<FillLayer>(
             env, FillLayer::javaClass, "nativePtr",
             std::make_unique<FillLayer, JNIEnv&, jni::String, jni::String>,

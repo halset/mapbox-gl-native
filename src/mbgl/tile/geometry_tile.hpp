@@ -35,6 +35,7 @@ public:
     void setData(std::unique_ptr<const GeometryTileData>);
 
     void setPlacementConfig(const PlacementConfig&) override;
+    void symbolDependenciesChanged() override;
     void redoLayout() override;
 
     Bucket* getBucket(const style::Layer&) override;
@@ -49,7 +50,7 @@ public:
 
     class LayoutResult {
     public:
-        std::unordered_map<std::string, std::unique_ptr<Bucket>> buckets;
+        std::unordered_map<std::string, std::shared_ptr<Bucket>> nonSymbolBuckets;
         std::unique_ptr<FeatureIndex> featureIndex;
         std::unique_ptr<GeometryTileData> tileData;
         uint64_t correlationID;
@@ -58,9 +59,8 @@ public:
 
     class PlacementResult {
     public:
-        std::unordered_map<std::string, std::unique_ptr<Bucket>> buckets;
+        std::unordered_map<std::string, std::shared_ptr<Bucket>> symbolBuckets;
         std::unique_ptr<CollisionTile> collisionTile;
-        PlacementConfig placedConfig;
         uint64_t correlationID;
     };
     void onPlacement(PlacementResult);
@@ -78,11 +78,14 @@ private:
     Actor<GeometryTileWorker> worker;
 
     uint64_t correlationID = 0;
-    optional<PlacementConfig> placedConfig;
+    optional<PlacementConfig> requestedConfig;
 
-    std::unordered_map<std::string, std::unique_ptr<Bucket>> buckets;
+    std::unordered_map<std::string, std::shared_ptr<Bucket>> nonSymbolBuckets;
     std::unique_ptr<FeatureIndex> featureIndex;
     std::unique_ptr<const GeometryTileData> data;
+
+    std::unordered_map<std::string, std::shared_ptr<Bucket>> symbolBuckets;
+    std::unique_ptr<CollisionTile> collisionTile;
 };
 
 } // namespace mbgl

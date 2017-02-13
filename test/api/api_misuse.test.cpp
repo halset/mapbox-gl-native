@@ -3,9 +3,10 @@
 #include <mbgl/test/fixture_log_observer.hpp>
 
 #include <mbgl/map/map.hpp>
-#include <mbgl/platform/default/headless_display.hpp>
+#include <mbgl/gl/headless_backend.hpp>
+#include <mbgl/gl/offscreen_view.hpp>
 #include <mbgl/storage/online_file_source.hpp>
-#include <mbgl/platform/default/thread_pool.hpp>
+#include <mbgl/util/default_thread_pool.hpp>
 #include <mbgl/util/exception.hpp>
 #include <mbgl/util/run_loop.hpp>
 
@@ -13,20 +14,21 @@
 
 using namespace mbgl;
 
+
 TEST(API, RenderWithoutCallback) {
     auto log = new FixtureLogObserver();
     Log::setObserver(std::unique_ptr<Log::Observer>(log));
 
     util::RunLoop loop;
 
-    auto display = std::make_shared<mbgl::HeadlessDisplay>();
-    HeadlessView view(display, 1);
-    view.resize(128, 512);
+    HeadlessBackend backend { test::sharedDisplay() };
+    OffscreenView view { backend.getContext(), { 128, 512 } };
     StubFileSource fileSource;
     ThreadPool threadPool(4);
 
-    std::unique_ptr<Map> map = std::make_unique<Map>(view, fileSource, threadPool, MapMode::Still);
-    map->renderStill(nullptr);
+    std::unique_ptr<Map> map =
+        std::make_unique<Map>(backend, view.size, 1, fileSource, threadPool, MapMode::Still);
+    map->renderStill(view, nullptr);
 
     // Force Map thread to join.
     map.reset();
@@ -44,16 +46,15 @@ TEST(API, RenderWithoutCallback) {
 TEST(API, RenderWithoutStyle) {
     util::RunLoop loop;
 
-    auto display = std::make_shared<mbgl::HeadlessDisplay>();
-    HeadlessView view(display, 1);
-    view.resize(128, 512);
+    HeadlessBackend backend { test::sharedDisplay() };
+    OffscreenView view { backend.getContext(), { 128, 512 } };
     StubFileSource fileSource;
     ThreadPool threadPool(4);
 
-    Map map(view, fileSource, threadPool, MapMode::Still);
+    Map map(backend, view.size, 1, fileSource, threadPool, MapMode::Still);
 
     std::exception_ptr error;
-    map.renderStill([&](std::exception_ptr error_, PremultipliedImage&&) {
+    map.renderStill(view, [&](std::exception_ptr error_) {
         error = error_;
         loop.stop();
     });

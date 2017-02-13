@@ -6,7 +6,7 @@ This document explains how to build the Mapbox iOS SDK from source. It is intend
 
 The Mapbox iOS SDK and iosapp demo application build against the iOS 7.0 SDK. The SDK is intended to run on iOS 7.0 and above, while iosapp is intended to run on iOS 8.0 and above due to the use of a dynamic framework. Both require Xcode on a computer running macOS.
 
-The Mapbox iOS SDK requires Xcode 7.3 or higher.
+The Mapbox iOS SDK requires Xcode 7.3 or above. The iosapp demo application requires Xcode 8.0 or above to build.
 
 ## Building the SDK
 
@@ -77,6 +77,7 @@ To add any Objective-C type, constant, or member to the iOS SDK’s public inter
 
 To add an Objective-C class, protocol, category, typedef, enumeration, or global constant to the iOS SDK’s public interface:
 
+1. _(Optional.)_ Add the macro `MGL_EXPORT` prior to the declaration for classes and global constants when adding them in shared headers located in `platform/darwin`. To use this macro, include `MGLFoundation.h`. You can check whether all public symbols are exported correctly by running `make check-public-symbols`.
 1. _(Optional.)_ Add the type or constant’s name to the relevant category in the `custom_categories` section of [the jazzy configuration file](./jazzy.yml). This is required for classes and protocols and also recommended for any other type that is strongly associated with a particular class or protocol. If you leave out this step, the symbol will appear in an “Other” section in the generated HTML documentation’s table of contents.
 1. _(Optional.)_ If the symbol would also be publicly exposed in the macOS SDK, consult [the companion macOS document](../macos/DEVELOPING.md#making-a-type-or-constant-public) for further instructions.
 
@@ -108,6 +109,43 @@ To add or update text that the user may see in the iOS SDK:
   * `val` is the English string.
 1. _(Optional.)_ When dealing with a number followed by a pluralized word, do not split the string. Instead, use a format string and make `val` ambiguous, like `%d file(s)`. Then pluralize for English in the appropriate [.stringsdict file](https://developer.apple.com/library/ios/documentation/MacOSX/Conceptual/BPInternational/StringsdictFileFormat/StringsdictFileFormat.html). See [platform/darwin/resources/en.lproj/Foundation.stringsdict](../darwin/resources/en.lproj/Foundation.stringsdict) for an example. Localizers should do likewise for their languages.
 1. Run `make genstrings` and commit any changes it makes to .strings files. The make rule also updates the macOS SDK’s strings tables.
+
+### Adding a localization
+
+Translations of all the Mapbox GL Native SDKs are managed [in Transifex](https://www.transifex.com/mapbox/mapbox-gl-native/). If your language already has a translation, feel free to complete or proofread it. Otherwise, please [request your language](https://www.transifex.com/mapbox/mapbox-gl-native/languages/). Note that we’re primarily interested in languages that iOS supports as system languages.
+
+Once you’ve finished translating the SDK into a new language in Transifex, perform these steps to make Xcode aware of the translation:
+
+1. In ios.xcworkspace, open the project editor for ios.xcodeproj. Using the project editor’s sidebar or tab bar dropdown, go to the “ios” project; under the Localizations section of the Info tab, click the + button to add your language to the project.
+1. In the sheet that appears, select all the .strings and .stringsdict files but not the .storyboard file. (LaunchScreen.storyboard is part of the iosapp example application, which is not localized.) If your language lacks declension and pluralization, as in the case of Chinese, omit the .stringsdict files.
+1. In the Project navigator, expand each .stringsdict file in the project. An additional version for your localization should be listed; translate it. See Apple’s documentation on the [.stringsdict format](https://developer.apple.com/library/content/documentation/MacOSX/Conceptual/BPInternational/StringsdictFileFormat/StringsdictFileFormat.html).
+1. Repeat the steps above in macos.xcworkspace.
+
+The .strings files should still be in the original English – that’s expected. Now you can pull your translations into this repository:
+
+1. _(First time only.)_ Download the [`tx` command line tool](https://docs.transifex.com/client/installing-the-client) and [configure your .transifexrc](https://docs.transifex.com/client/client-configuration).
+1. Run `tx pull -a`.
+1. Convert any added .strings files from UTF-16 encoding to UTF-8 encoding to facilitate diffing and merging. You can convert the file encoding using Xcode’s File inspector or the following command (substituting _MYLANG_ for the locale code):
+
+```
+find platform/{darwin,ios}/resources platform/macos/sdk -path '*/MYLANG.lproj/*.strings' -exec textutil -convert txt -extension strings -inputencoding UTF-16 -encoding UTF-8 {} -output {} \;
+```
+
+### Adding a code example
+
+To add an example code listing to the documentation for a class or class member:
+
+1. Add a test method named in the form `testMGLClass` or `testMGLClass$method`
+   to [MGLDocumentationExampleTests](test/MGLDocumentationExampleTests.swift).
+   Wrap the code you’d like to appear in the documentation within
+   `//#-example-code` and `//#-end-example-code` comments.
+1. Insert the code listings into the headers:
+
+```bash
+make darwin-update-examples
+```
+
+[SourceKitten](https://github.com/jpsim/SourceKitten/) is required and will be installed automatically using Homebrew.
 
 ## Testing
 

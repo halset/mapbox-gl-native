@@ -19,7 +19,7 @@ QQuickMapboxGLRenderer::QQuickMapboxGLRenderer()
     settings.setCacheDatabaseMaximumSize(20 * 1024 * 1024);
     settings.setViewportMode(QMapboxGLSettings::FlippedYViewport);
 
-    m_map.reset(new QMapboxGL(nullptr, settings));
+    m_map.reset(new QMapboxGL(nullptr, settings, QSize(256, 256), 1));
 }
 
 QQuickMapboxGLRenderer::~QQuickMapboxGLRenderer()
@@ -28,7 +28,7 @@ QQuickMapboxGLRenderer::~QQuickMapboxGLRenderer()
 
 QOpenGLFramebufferObject* QQuickMapboxGLRenderer::createFramebufferObject(const QSize &size)
 {
-    m_map->resize(size);
+    m_map->resize(size / m_pixelRatio, size);
 
     QOpenGLFramebufferObjectFormat format;
     format.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
@@ -38,7 +38,7 @@ QOpenGLFramebufferObject* QQuickMapboxGLRenderer::createFramebufferObject(const 
 
 void QQuickMapboxGLRenderer::render()
 {
-    m_map->render();
+    m_map->render(framebufferObject());
 }
 
 void QQuickMapboxGLRenderer::synchronize(QQuickFramebufferObject *item)
@@ -46,9 +46,15 @@ void QQuickMapboxGLRenderer::synchronize(QQuickFramebufferObject *item)
     auto quickMap = qobject_cast<QQuickMapboxGL*>(item);
     if (!m_initialized) {
         QObject::connect(m_map.data(), &QMapboxGL::needsRendering, quickMap, &QQuickMapboxGL::update);
-        QObject::connect(m_map.data(), SIGNAL(mapChanged(QMapbox::MapChange)), quickMap, SLOT(onMapChanged(QMapbox::MapChange)));
+        QObject::connect(m_map.data(), SIGNAL(mapChanged(QMapboxGL::MapChange)), quickMap, SLOT(onMapChanged(QMapboxGL::MapChange)));
         QObject::connect(this, &QQuickMapboxGLRenderer::centerChanged, quickMap, &QQuickMapboxGL::setCenter);
         m_initialized = true;
+    }
+
+    if (auto window = quickMap->window()) {
+        m_pixelRatio = window->devicePixelRatio();
+    } else {
+        m_pixelRatio = 1;
     }
 
     auto syncStatus = quickMap->m_syncState;
@@ -82,7 +88,7 @@ void QQuickMapboxGLRenderer::synchronize(QQuickFramebufferObject *item)
     }
 
     for (const auto& change : quickMap->m_sourceChanges) {
-        m_map->addSource(change.value("id").toString(), change);
+        m_map->updateSource(change.value("id").toString(), change);
     }
     quickMap->m_sourceChanges.clear();
 

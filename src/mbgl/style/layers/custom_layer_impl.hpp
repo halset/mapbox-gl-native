@@ -21,16 +21,18 @@ public:
     ~Impl() final;
 
     void initialize();
+    void deinitialize();
     void render(const TransformState&) const;
 
 private:
     std::unique_ptr<Layer> clone() const override;
     std::unique_ptr<Layer> cloneRef(const std::string& id) const override;
+    void stringifyLayout(rapidjson::Writer<rapidjson::StringBuffer>&) const override;
 
     void cascade(const CascadeParameters&) final {}
-    bool recalculate(const CalculationParameters&) final;
+    bool evaluate(const PropertyEvaluationParameters&) final;
 
-    std::unique_ptr<Bucket> createBucket(BucketParameters&) const final;
+    std::unique_ptr<Bucket> createBucket(const BucketParameters&, const std::vector<const Layer*>&) const final;
 
     CustomLayerInitializeFunction initializeFn = nullptr;
     CustomLayerRenderFunction renderFn = nullptr;

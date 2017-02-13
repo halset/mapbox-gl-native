@@ -1,7 +1,7 @@
 #include <mbgl/map/map.hpp>
-#include <mbgl/platform/default/headless_display.hpp>
-#include <mbgl/platform/default/headless_view.hpp>
-#include <mbgl/platform/default/thread_pool.hpp>
+#include <mbgl/gl/headless_backend.hpp>
+#include <mbgl/gl/offscreen_view.hpp>
+#include <mbgl/util/default_thread_pool.hpp>
 #include <mbgl/sprite/sprite_image.hpp>
 #include <mbgl/test/stub_file_source.hpp>
 #include <mbgl/test/util.hpp>
@@ -22,15 +22,15 @@ public:
         map.setStyleJSON(util::read_file("test/fixtures/api/query_style.json"));
         map.addImage("test-icon", std::move(image));
 
-        test::render(map);
+        test::render(map, view);
     }
 
     util::RunLoop loop;
-    std::shared_ptr<HeadlessDisplay> display { std::make_shared<HeadlessDisplay>() };
-    HeadlessView view { display, 1 };
+    HeadlessBackend backend { test::sharedDisplay() };
+    OffscreenView view { backend.getContext() };
     StubFileSource fileSource;
     ThreadPool threadPool { 4 };
-    Map map { view, fileSource, threadPool, MapMode::Still };
+    Map map { backend, view.size, 1, fileSource, threadPool, MapMode::Still };
 };
 
 } // end namespace

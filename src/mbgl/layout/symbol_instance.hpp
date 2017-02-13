@@ -1,22 +1,20 @@
 #pragma once
 
 #include <mbgl/text/quads.hpp>
+#include <mbgl/text/glyph.hpp>
 #include <mbgl/text/collision_feature.hpp>
+#include <mbgl/style/layers/symbol_layer_properties.hpp>
 
 namespace mbgl {
 
 struct Anchor;
 class IndexedSubfeature;
 
-namespace style {
-class SymbolLayoutProperties;
-} // namespace style
-
 class SymbolInstance {
 public:
     explicit SymbolInstance(Anchor& anchor, const GeometryCoordinates& line,
-            const Shaping& shapedText, const PositionedIcon& shapedIcon,
-            const style::SymbolLayoutProperties&, const bool inside, const uint32_t index,
+            const std::pair<Shaping, Shaping>& shapedTextOrientations, const PositionedIcon& shapedIcon,
+            const style::SymbolLayoutProperties::Evaluated&, const bool inside, const uint32_t index,
             const float textBoxScale, const float textPadding, style::SymbolPlacementType textPlacement,
             const float iconBoxScale, const float iconPadding, style::SymbolPlacementType iconPlacement,
             const GlyphPositions& face, const IndexedSubfeature& indexedfeature);
@@ -29,6 +27,7 @@ public:
     SymbolQuads iconQuads;
     CollisionFeature textCollisionFeature;
     CollisionFeature iconCollisionFeature;
+    WritingModeType writingModes;
 };
 
 } // namespace mbgl

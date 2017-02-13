@@ -3,13 +3,12 @@
 #include "qmapbox.hpp"
 #include "qmapboxgl.hpp"
 
+#include <QGeoCoordinate>
 #include <QObject>
+#include <QOpenGLFramebufferObject>
 #include <QQuickFramebufferObject>
 #include <QScopedPointer>
-
-class QGeoCoordinate;
-class QOpenGLFramebufferObject;
-class QSize;
+#include <QSize>
 
 class QQuickMapboxGLRenderer : public QObject, public QQuickFramebufferObject::Renderer
 {
@@ -29,6 +28,7 @@ signals:
 
 private:
     bool m_initialized = false;
+    qreal m_pixelRatio = 1;
 
     QScopedPointer<QMapboxGL> m_map;
 };

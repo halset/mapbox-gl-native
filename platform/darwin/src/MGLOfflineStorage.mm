@@ -13,16 +13,20 @@
 static NSString * const MGLOfflineStorageFileName = @"cache.db";
 static NSString * const MGLOfflineStorageFileName3_2_0_beta_1 = @"offline.db";
 
-NSString * const MGLOfflinePackProgressChangedNotification = @"MGLOfflinePackProgressChanged";
-NSString * const MGLOfflinePackErrorNotification = @"MGLOfflinePackError";
-NSString * const MGLOfflinePackMaximumMapboxTilesReachedNotification = @"MGLOfflinePackMaximumMapboxTilesReached";
+const NSNotificationName MGLOfflinePackProgressChangedNotification = @"MGLOfflinePackProgressChanged";
+const NSNotificationName MGLOfflinePackErrorNotification = @"MGLOfflinePackError";
+const NSNotificationName MGLOfflinePackMaximumMapboxTilesReachedNotification = @"MGLOfflinePackMaximumMapboxTilesReached";
 
-NSString * const MGLOfflinePackStateUserInfoKey = @"State";
-NSString * const MGLOfflinePackProgressUserInfoKey = @"Progress";
-NSString * const MGLOfflinePackErrorUserInfoKey = @"Error";
-NSString * const MGLOfflinePackMaximumCountUserInfoKey = @"MaximumCount";
+const MGLOfflinePackUserInfoKey MGLOfflinePackUserInfoKeyState = @"State";
+NSString * const MGLOfflinePackStateUserInfoKey = MGLOfflinePackUserInfoKeyState;
+const MGLOfflinePackUserInfoKey MGLOfflinePackUserInfoKeyProgress = @"Progress";
+NSString * const MGLOfflinePackProgressUserInfoKey = MGLOfflinePackUserInfoKeyProgress;
+const MGLOfflinePackUserInfoKey MGLOfflinePackUserInfoKeyError = @"Error";
+NSString * const MGLOfflinePackErrorUserInfoKey = MGLOfflinePackUserInfoKeyError;
+const MGLOfflinePackUserInfoKey MGLOfflinePackUserInfoKeyMaximumCount = @"MaximumCount";
+NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoKeyMaximumCount;
 
-@interface MGLOfflineStorage () <MGLOfflinePackDelegate>
+@interface MGLOfflineStorage ()
 
 @property (nonatomic, strong, readwrite) NS_MUTABLE_ARRAY_OF(MGLOfflinePack *) *packs;
 @property (nonatomic) mbgl::DefaultFileSource *mbglFileSource;
@@ -157,11 +161,11 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = @"MaximumCount";
 - (void)dealloc {
     [[MGLNetworkConfiguration sharedManager] removeObserver:self forKeyPath:@"apiBaseURL"];
     [[MGLAccountManager sharedManager] removeObserver:self forKeyPath:@"accessToken"];
-    
+
     for (MGLOfflinePack *pack in self.packs) {
         [pack invalidate];
     }
-    
+
     delete _mbglFileSource;
     _mbglFileSource = nullptr;
 }
@@ -193,7 +197,6 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = @"MaximumCount";
         pack.state = MGLOfflinePackStateInactive;
         MGLOfflineStorage *strongSelf = weakSelf;
         [[strongSelf mutableArrayValueForKey:@"packs"] addObject:pack];
-        pack.delegate = strongSelf;
         if (completion) {
             completion(pack, error);
         }
@@ -206,7 +209,7 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = @"MaximumCount";
          @"Regions of type %@ are unsupported.", NSStringFromClass([region class])];
         return;
     }
-    
+
     const mbgl::OfflineTilePyramidRegionDefinition regionDefinition = [(id <MGLOfflineRegion_Private>)region offlineRegionDefinition];
     mbgl::OfflineRegionMetadata metadata(context.length);
     [context getBytes:&metadata[0] length:metadata.size()];
@@ -243,7 +246,7 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = @"MaximumCount";
         completion(nil);
         return;
     }
-    
+
     self.mbglFileSource->deleteOfflineRegion(std::move(*mbglOfflineRegion), [&, completion](std::exception_ptr exception) {
         NSError *error;
         if (exception) {
@@ -265,10 +268,6 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = @"MaximumCount";
             [pack invalidate];
         }
         self.packs = [packs mutableCopy];
-        
-        for (MGLOfflinePack *pack in packs) {
-            pack.delegate = self;
-        }
     }];
 }
 
@@ -308,30 +307,9 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = @"MaximumCount";
     if (!cachePath) {
         return 0;
     }
-    
+
     NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:cachePath error:NULL];
     return attributes.fileSize;
-}
-
-#pragma mark MGLOfflinePackDelegate methods
-
-- (void)offlinePack:(MGLOfflinePack *)pack progressDidChange:(__unused MGLOfflinePackProgress)progress {
-    [[NSNotificationCenter defaultCenter] postNotificationName:MGLOfflinePackProgressChangedNotification object:pack userInfo:@{
-        MGLOfflinePackStateUserInfoKey: @(pack.state),
-        MGLOfflinePackProgressUserInfoKey: [NSValue valueWithMGLOfflinePackProgress:progress],
-    }];
-}
-
-- (void)offlinePack:(MGLOfflinePack *)pack didReceiveError:(NSError *)error {
-    [[NSNotificationCenter defaultCenter] postNotificationName:MGLOfflinePackErrorNotification object:pack userInfo:@{
-        MGLOfflinePackErrorUserInfoKey: error,
-    }];
-}
-
-- (void)offlinePack:(MGLOfflinePack *)pack didReceiveMaximumAllowedMapboxTiles:(uint64_t)maximumCount {
-    [[NSNotificationCenter defaultCenter] postNotificationName:MGLOfflinePackMaximumMapboxTilesReachedNotification object:pack userInfo:@{
-        MGLOfflinePackMaximumCountUserInfoKey: @(maximumCount),
-    }];
 }
 
 @end

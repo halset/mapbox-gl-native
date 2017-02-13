@@ -2,17 +2,15 @@
 
 #import "MGLMapView_Private.h"
 
-#import <mbgl/gl/gl.hpp>
-
 @implementation MGLOpenGLLayer
 
 - (MGLMapView *)mapView {
     return (MGLMapView *)super.view;
 }
 
-//- (BOOL)isAsynchronous {
+// - (BOOL)isAsynchronous {
 //    return YES;
-//}
+// }
 
 - (BOOL)needsDisplayOnBoundsChange {
     return YES;
@@ -24,6 +22,7 @@
 
 - (NSOpenGLPixelFormat *)openGLPixelFormatForDisplayMask:(uint32_t)mask {
     NSOpenGLPixelFormatAttribute pfas[] = {
+        NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersionLegacy,
         NSOpenGLPFAAccelerated,
         NSOpenGLPFAClosestPolicy,
         NSOpenGLPFAAccumSize, 32,
@@ -32,6 +31,7 @@
         NSOpenGLPFADepthSize, 16,
         NSOpenGLPFAStencilSize, 8,
         NSOpenGLPFAScreenMask, mask,
+        NSOpenGLPFAAllowOfflineRenderers, // Allows using the integrated GPU
         0
     };
     return [[NSOpenGLPixelFormat alloc] initWithAttributes:pfas];

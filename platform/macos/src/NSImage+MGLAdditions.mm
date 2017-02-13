@@ -1,6 +1,34 @@
 #import "NSImage+MGLAdditions.h"
 
+#include <mbgl/util/image+MGLAdditions.hpp>
+
 @implementation NSImage (MGLAdditions)
+
+- (nullable instancetype)initWithMGLPremultipliedImage:(mbgl::PremultipliedImage&&)src {
+    CGImageRef image = CGImageFromMGLPremultipliedImage(std::move(src));
+    if (!image) {
+        return nil;
+    }
+
+    self = [self initWithCGImage:image size:NSZeroSize];
+    CGImageRelease(image);
+    return self;
+}
+
+- (nullable instancetype)initWithMGLSpriteImage:(const mbgl::SpriteImage *)spriteImage {
+    CGImageRef image = CGImageFromMGLPremultipliedImage(spriteImage->image.clone());
+    if (!image) {
+        return nil;
+    }
+
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithCGImage:image];
+    CGImageRelease(image);
+    if (self = [self initWithSize:NSMakeSize(spriteImage->getWidth(), spriteImage->getHeight())]) {
+        [self addRepresentation:rep];
+        [self setTemplate:spriteImage->sdf];
+    }
+    return self;
+}
 
 - (std::unique_ptr<mbgl::SpriteImage>)mgl_spriteImage {
     // Create a bitmap image representation from the image, respecting backing
@@ -10,13 +38,11 @@
     NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithFocusedViewRect:{ NSZeroPoint, self.size }];
     [self unlockFocus];
 
-    // Get the image’s raw pixel data as an RGBA buffer.
-    std::string pixelString((const char *)rep.bitmapData, rep.pixelsWide * rep.pixelsHigh * 4 /* RGBA */);
-
-    mbgl::PremultipliedImage cPremultipliedImage(rep.pixelsWide, rep.pixelsHigh);
-    std::copy(rep.bitmapData, rep.bitmapData + cPremultipliedImage.size(), cPremultipliedImage.data.get());
+    mbgl::PremultipliedImage cPremultipliedImage({ static_cast<uint32_t>(rep.pixelsWide), static_cast<uint32_t>(rep.pixelsHigh) });
+    std::copy(rep.bitmapData, rep.bitmapData + cPremultipliedImage.bytes(), cPremultipliedImage.data.get());
     return std::make_unique<mbgl::SpriteImage>(std::move(cPremultipliedImage),
-                                               (float)(rep.pixelsWide / self.size.width));
+                                               (float)(rep.pixelsWide / self.size.width),
+                                               [self isTemplate]);
 }
 
 @end

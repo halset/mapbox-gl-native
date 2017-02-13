@@ -2,27 +2,25 @@
 
 @implementation NSExpression (MGLAdditions)
 
-- (std::vector<mbgl::Value>)mgl_filterValues
-{
-    if ([self.constantValue isKindOfClass:NSArray.class]) {
-        NSArray *values = self.constantValue;
-        std::vector<mbgl::Value>convertedValues;
-        for (id value in values) {
-            convertedValues.push_back([self mgl_convertedValueWithValue:value]);
+- (std::vector<mbgl::Value>)mgl_aggregateMBGLValue {
+    if ([self.constantValue isKindOfClass:[NSArray class]] || [self.constantValue isKindOfClass:[NSSet class]]) {
+        std::vector<mbgl::Value> convertedValues;
+        for (id value in self.constantValue) {
+            NSExpression *expression = value;
+            if (![expression isKindOfClass:[NSExpression class]]) {
+                expression = [NSExpression expressionForConstantValue:expression];
+            }
+            convertedValues.push_back(expression.mgl_constantMBGLValue);
         }
         return convertedValues;
     }
-    [NSException raise:@"Values not handled" format:@""];
-    return { };
+    [NSException raise:NSInvalidArgumentException
+                format:@"Constant value expression must contain an array or set."];
+    return {};
 }
 
-- (mbgl::Value)mgl_filterValue
-{
-    return [self mgl_convertedValueWithValue:self.constantValue];
-}
-
-- (mbgl::Value)mgl_convertedValueWithValue:(id)value
-{
+- (mbgl::Value)mgl_constantMBGLValue {
+    id value = self.constantValue;
     if ([value isKindOfClass:NSString.class]) {
         return { std::string([(NSString *)value UTF8String]) };
     } else if ([value isKindOfClass:NSNumber.class]) {
@@ -42,7 +40,10 @@
             // We still do this conversion in order to provide a valid value.
             static dispatch_once_t onceToken;
             dispatch_once(&onceToken, ^{
-                NSLog(@"One-time warning: Float values are converted to double and can introduce imprecision; please use double values explicitly in predicate arguments.");
+                NSLog(@"Float value in expression will be converted to a double; some imprecision may result. "
+                      @"Use double values explicitly when specifying constant expression values and "
+                      @"when specifying arguments to predicate and expression format strings. "
+                      @"This will be logged only once.");
             });
             return { (double)number.doubleValue };
         } else if ([number compare:@(0)] == NSOrderedDescending ||
@@ -55,35 +56,90 @@
             // We use long long here to avoid any truncation.
             return { (int64_t)number.longLongValue };
         }
+    } else if (value && value != [NSNull null]) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"Can’t convert %s:%@ to mbgl::Value", [value objCType], value];
     }
-    [NSException raise:@"Value not handled"
-                format:@"Can’t convert %s:%@ to mbgl::Value", [value objCType], value];
-    return { };
+    return {};
 }
 
-- (mbgl::FeatureIdentifier)mgl_featureIdentifier
-{
+- (std::vector<mbgl::FeatureType>)mgl_aggregateFeatureType {
+    if ([self.constantValue isKindOfClass:[NSArray class]] || [self.constantValue isKindOfClass:[NSSet class]]) {
+        std::vector<mbgl::FeatureType> convertedValues;
+        for (id value in self.constantValue) {
+            NSExpression *expression = value;
+            if (![expression isKindOfClass:[NSExpression class]]) {
+                expression = [NSExpression expressionForConstantValue:expression];
+            }
+            convertedValues.push_back(expression.mgl_featureType);
+        }
+        return convertedValues;
+    }
+    [NSException raise:NSInvalidArgumentException
+                format:@"Constant value expression must contain an array or set."];
+    return {};
+}
+
+- (mbgl::FeatureType)mgl_featureType {
     id value = self.constantValue;
-    mbgl::Value mbglValue = [self mgl_filterValue];
-    
     if ([value isKindOfClass:NSString.class]) {
-        return mbglValue.get<std::string>();
+        if ([value isEqualToString:@"Point"]) {
+            return mbgl::FeatureType::Point;
+        }
+        if ([value isEqualToString:@"LineString"]) {
+            return mbgl::FeatureType::LineString;
+        }
+        if ([value isEqualToString:@"Polygon"]) {
+            return mbgl::FeatureType::Polygon;
+        }
     } else if ([value isKindOfClass:NSNumber.class]) {
-        NSNumber *number = (NSNumber *)value;
-        if ((strcmp([number objCType], @encode(char)) == 0) ||
-            (strcmp([number objCType], @encode(BOOL)) == 0)) {
-            return mbglValue.get<bool>();
-        } else if ( strcmp([number objCType], @encode(double)) == 0 ||
-                    strcmp([number objCType], @encode(float)) == 0) {
-            return mbglValue.get<double>();
-        } else if ([number compare:@(0)] == NSOrderedDescending ||
-                   [number compare:@(0)] == NSOrderedSame) {
-            return mbglValue.get<uint64_t>();
-        } else if ([number compare:@(0)] == NSOrderedAscending) {
-            return mbglValue.get<int64_t>();
+        switch ([value integerValue]) {
+            case 1:
+                return mbgl::FeatureType::Point;
+            case 2:
+                return mbgl::FeatureType::LineString;
+            case 3:
+                return mbgl::FeatureType::Polygon;
+            default:
+                break;
         }
     }
-    
+    return mbgl::FeatureType::Unknown;
+}
+
+- (std::vector<mbgl::FeatureIdentifier>)mgl_aggregateFeatureIdentifier {
+    if ([self.constantValue isKindOfClass:[NSArray class]] || [self.constantValue isKindOfClass:[NSSet class]]) {
+        std::vector<mbgl::FeatureIdentifier> convertedValues;
+        for (id value in self.constantValue) {
+            NSExpression *expression = value;
+            if (![expression isKindOfClass:[NSExpression class]]) {
+                expression = [NSExpression expressionForConstantValue:expression];
+            }
+            convertedValues.push_back(expression.mgl_featureIdentifier);
+        }
+        return convertedValues;
+    }
+    [NSException raise:NSInvalidArgumentException
+                format:@"Constant value expression must contain an array or set."];
+    return {};
+}
+
+- (mbgl::FeatureIdentifier)mgl_featureIdentifier {
+    mbgl::Value mbglValue = self.mgl_constantMBGLValue;
+
+    if (mbglValue.is<std::string>()) {
+        return mbglValue.get<std::string>();
+    }
+    if (mbglValue.is<double>()) {
+        return mbglValue.get<double>();
+    }
+    if (mbglValue.is<uint64_t>()) {
+        return mbglValue.get<uint64_t>();
+    }
+    if (mbglValue.is<int64_t>()) {
+        return mbglValue.get<int64_t>();
+    }
+
     return {};
 }
 

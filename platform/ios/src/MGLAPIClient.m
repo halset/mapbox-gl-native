@@ -21,7 +21,6 @@ static NSString * const MGLAPIClientHTTPMethodPost = @"POST";
 @property (nonatomic, copy) NSData *geoTrustCert;
 @property (nonatomic, copy) NSData *testServerCert;
 @property (nonatomic, copy) NSString *userAgent;
-@property (nonatomic) NSMutableArray *dataTasks;
 @property (nonatomic) BOOL usesTestServer;
 
 @end
@@ -33,7 +32,6 @@ static NSString * const MGLAPIClientHTTPMethodPost = @"POST";
     if (self) {
         _session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
                                                  delegate:self delegateQueue:nil];
-        _dataTasks = [NSMutableArray array];
         [self loadCertificates];
         [self setupBaseURL];
         [self setupUserAgent];
@@ -59,22 +57,13 @@ static NSString * const MGLAPIClientHTTPMethodPost = @"POST";
             error = error ?: statusError;
             completionHandler(error);
         }
-        [self.dataTasks removeObject:dataTask];
         dataTask = nil;
     }];
     [dataTask resume];
-    if (dataTask) {
-        [self.dataTasks addObject:dataTask];
-    }
 }
 
 - (void)postEvent:(nonnull MGLMapboxEventAttributes *)event completionHandler:(nullable void (^)(NSError * _Nullable error))completionHandler {
     [self postEvents:@[event] completionHandler:completionHandler];
-}
-
-- (void)cancelAll {
-    [self.dataTasks makeObjectsPerformSelector:@selector(cancel)];
-    [self.dataTasks removeAllObjects];
 }
 
 #pragma mark Utilities
@@ -86,22 +75,22 @@ static NSString * const MGLAPIClientHTTPMethodPost = @"POST";
     [request setValue:self.userAgent forHTTPHeaderField:MGLAPIClientHeaderFieldUserAgentKey];
     [request setValue:MGLAPIClientHeaderFieldContentTypeValue forHTTPHeaderField:MGLAPIClientHeaderFieldContentTypeKey];
     [request setHTTPMethod:MGLAPIClientHTTPMethodPost];
-    
+
     NSData *jsonData = [self serializedDataForEvents:events];
-    
+
     // Compressing less than 3 events can have a negative impact on the size.
     if (events.count > 2) {
         NSData *compressedData = [jsonData mgl_compressedData];
         [request setValue:@"deflate" forHTTPHeaderField:MGLAPIClientHeaderFieldContentEncodingKey];
         [request setHTTPBody:compressedData];
     }
-    
+
     // Set JSON data if events.count were less than 3 or something went wrong with compressing HTTP body data.
     if (!request.HTTPBody) {
         [request setValue:nil forHTTPHeaderField:MGLAPIClientHeaderFieldContentEncodingKey];
         [request setHTTPBody:jsonData];
     }
-    
+
     return [request copy];
 }
 
@@ -122,7 +111,7 @@ static NSString * const MGLAPIClientHTTPMethodPost = @"POST";
     self.geoTrustCert = certificate;
     [self loadCertificate:&certificate withResource:@"api_mapbox_com-digicert"];
     self.digicertCert = certificate;
-    [self loadCertificate:&certificate withResource:@"star_tilestream_net"];
+    [self loadCertificate:&certificate withResource:@"api_mapbox_staging"];
     self.testServerCert = certificate;
 }
 
@@ -154,10 +143,10 @@ static NSString * const MGLAPIClientHTTPMethodPost = @"POST";
 
 - (void)URLSession:(NSURLSession *)session didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge completionHandler:(void (^) (NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
     if([challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]) {
-        
+
         SecTrustRef serverTrust = [[challenge protectionSpace] serverTrust];
         SecTrustResultType trustResult;
-        
+
         // Validate the certificate chain with the device's trust store anyway
         // This *might* give use revocation checking
         SecTrustEvaluate(serverTrust, &trustResult);
@@ -165,13 +154,13 @@ static NSString * const MGLAPIClientHTTPMethodPost = @"POST";
         {
             // Look for a pinned certificate in the server's certificate chain
             long numKeys = SecTrustGetCertificateCount(serverTrust);
-            
+
             BOOL found = NO;
             // Try GeoTrust Cert First
             for (int lc = 0; lc < numKeys; lc++) {
                 SecCertificateRef certificate = SecTrustGetCertificateAtIndex(serverTrust, lc);
                 NSData *remoteCertificateData = CFBridgingRelease(SecCertificateCopyData(certificate));
-                
+
                 // Compare Remote Key With Local Version
                 if ([remoteCertificateData isEqualToData:_geoTrustCert]) {
                     // Found the certificate; continue connecting
@@ -180,13 +169,13 @@ static NSString * const MGLAPIClientHTTPMethodPost = @"POST";
                     break;
                 }
             }
-            
+
             if (!found) {
                 // Fallback to Digicert Cert
                 for (int lc = 0; lc < numKeys; lc++) {
                     SecCertificateRef certificate = SecTrustGetCertificateAtIndex(serverTrust, lc);
                     NSData *remoteCertificateData = CFBridgingRelease(SecCertificateCopyData(certificate));
-                    
+
                     // Compare Remote Key With Local Version
                     if ([remoteCertificateData isEqualToData:_digicertCert]) {
                         // Found the certificate; continue connecting
@@ -195,13 +184,13 @@ static NSString * const MGLAPIClientHTTPMethodPost = @"POST";
                         break;
                     }
                 }
-                
+
                 if (!found && _usesTestServer) {
                     // See if this is test server
                     for (int lc = 0; lc < numKeys; lc++) {
                         SecCertificateRef certificate = SecTrustGetCertificateAtIndex(serverTrust, lc);
                         NSData *remoteCertificateData = CFBridgingRelease(SecCertificateCopyData(certificate));
-                        
+
                         // Compare Remote Key With Local Version
                         if ([remoteCertificateData isEqualToData:_testServerCert]) {
                             // Found the certificate; continue connecting
@@ -211,7 +200,7 @@ static NSString * const MGLAPIClientHTTPMethodPost = @"POST";
                         }
                     }
                 }
-                
+
                 if (!found) {
                     // The certificate wasn't found in GeoTrust nor Digicert. Cancel the connection.
                     completionHandler(NSURLSessionAuthChallengeCancelAuthenticationChallenge, [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust]);
