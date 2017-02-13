@@ -1,7 +1,7 @@
 #pragma once
 
 #include <mbgl/geometry/binpack.hpp>
-#include <mbgl/gl/object.hpp>
+#include <mbgl/gl/texture.hpp>
 #include <mbgl/util/noncopyable.hpp>
 #include <mbgl/util/optional.hpp>
 #include <mbgl/sprite/sprite_image.hpp>
@@ -26,13 +26,15 @@ class Context;
 class SpriteImage;
 class SpritePosition;
 
-struct SpriteAtlasPosition {
+class SpriteAtlasPosition {
+public:
     std::array<float, 2> size = {{ 0, 0 }};
     std::array<float, 2> tl = {{ 0, 0 }};
     std::array<float, 2> br = {{ 0, 0 }};
 };
 
-struct SpriteAtlasElement {
+class SpriteAtlasElement {
+public:
     Rect<uint16_t> pos;
     std::shared_ptr<const SpriteImage> spriteImage;
     float relativePixelRatio;
@@ -45,10 +47,9 @@ enum class SpritePatternMode : bool {
 
 class SpriteAtlas : public util::noncopyable {
 public:
-    typedef uint16_t dimension;
     using Sprites = std::map<std::string, std::shared_ptr<const SpriteImage>>;
 
-    SpriteAtlas(dimension width, dimension height, float pixelRatio);
+    SpriteAtlas(Size, float pixelRatio);
     ~SpriteAtlas();
 
     void load(const std::string& url, FileSource&);
@@ -91,21 +92,19 @@ public:
     // the texture is only bound when the data is out of date (=dirty).
     void upload(gl::Context&, gl::TextureUnit unit);
 
-    dimension getWidth() const { return width; }
-    dimension getHeight() const { return height; }
-    dimension getTextureWidth() const { return pixelWidth; }
-    dimension getTextureHeight() const { return pixelHeight; }
+    Size getSize() const { return size; }
     float getPixelRatio() const { return pixelRatio; }
 
     // Only for use in tests.
-    const uint32_t* getData() const { return data.get(); }
+    const PremultipliedImage& getAtlasImage() const {
+        return image;
+    }
 
 private:
     void _setSprite(const std::string&, const std::shared_ptr<const SpriteImage>& = nullptr);
     void emitSpriteLoadedIfComplete();
 
-    const uint16_t width, height;
-    const dimension pixelWidth, pixelHeight;
+    const Size size;
     const float pixelRatio;
 
     struct Loader;
@@ -125,26 +124,24 @@ private:
     Sprites dirtySprites;
 
     struct Holder : private util::noncopyable {
-        Holder(std::shared_ptr<const SpriteImage>, Rect<dimension>);
+        Holder(std::shared_ptr<const SpriteImage>, Rect<uint16_t>);
         Holder(Holder&&);
         std::shared_ptr<const SpriteImage> spriteImage;
-        const Rect<dimension> pos;
+        const Rect<uint16_t> pos;
     };
 
     using Key = std::pair<std::string, SpritePatternMode>;
 
-    Rect<SpriteAtlas::dimension> allocateImage(const SpriteImage&);
+    Rect<uint16_t> allocateImage(const SpriteImage&);
     void copy(const Holder& holder, SpritePatternMode mode);
 
     std::recursive_mutex mtx;
-    BinPack<dimension> bin;
+    BinPack<uint16_t> bin;
     std::map<Key, Holder> images;
     std::unordered_set<std::string> uninitialized;
-    std::unique_ptr<uint32_t[]> data;
-    std::atomic<bool> dirtyFlag;
-    bool fullUploadRequired = true;
-    mbgl::optional<gl::UniqueTexture> texture;
-    uint32_t filter = 0;
+    PremultipliedImage image;
+    mbgl::optional<gl::Texture> texture;
+    std::atomic<bool> dirty;
     static const int buffer = 1;
 };
 

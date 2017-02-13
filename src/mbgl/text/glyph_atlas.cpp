@@ -1,10 +1,9 @@
 #include <mbgl/text/glyph_atlas.hpp>
 #include <mbgl/text/glyph_atlas_observer.hpp>
 #include <mbgl/text/glyph_pbf.hpp>
-#include <mbgl/gl/gl.hpp>
 #include <mbgl/gl/context.hpp>
-#include <mbgl/platform/log.hpp>
-#include <mbgl/platform/platform.hpp>
+#include <mbgl/util/logging.hpp>
+#include <mbgl/util/platform.hpp>
 
 #include <cassert>
 #include <algorithm>
@@ -13,13 +12,11 @@ namespace mbgl {
 
 static GlyphAtlasObserver nullObserver;
 
-GlyphAtlas::GlyphAtlas(uint16_t width_, uint16_t height_, FileSource& fileSource_)
-    : width(width_),
-      height(height_),
-      fileSource(fileSource_),
+GlyphAtlas::GlyphAtlas(const Size size, FileSource& fileSource_)
+    : fileSource(fileSource_),
       observer(&nullObserver),
-      bin(width_, height_),
-      data(std::make_unique<uint8_t[]>(width_ * height_)),
+      bin(size.width, size.height),
+      image(size),
       dirty(true) {
 }
 
@@ -84,7 +81,7 @@ void GlyphAtlas::setObserver(GlyphAtlasObserver* observer_) {
 }
 
 void GlyphAtlas::addGlyphs(uintptr_t tileUID,
-                           const std::u32string& text,
+                           const std::u16string& text,
                            const FontStack& fontStack,
                            const GlyphSet& glyphSet,
                            GlyphPositions& face)
@@ -93,7 +90,7 @@ void GlyphAtlas::addGlyphs(uintptr_t tileUID,
 
     const std::map<uint32_t, SDFGlyph>& sdfs = glyphSet.getSDFs();
 
-    for (uint32_t chr : text)
+    for (char16_t chr : text)
     {
         auto sdf_it = sdfs.find(chr);
         if (sdf_it == sdfs.end()) {
@@ -110,9 +107,6 @@ Rect<uint16_t> GlyphAtlas::addGlyph(uintptr_t tileUID,
                                     const FontStack& fontStack,
                                     const SDFGlyph& glyph)
 {
-    // Use constant value for now.
-    const uint8_t buffer = 3;
-
     std::map<uint32_t, GlyphValue>& face = index[fontStack];
     auto it = face.find(glyph.id);
 
@@ -123,13 +117,21 @@ Rect<uint16_t> GlyphAtlas::addGlyph(uintptr_t tileUID,
         return value.rect;
     }
 
-    // The glyph bitmap has zero width.
-    if (glyph.bitmap.empty()) {
+    // Guard against glyphs that are too large, or that we don't need to place into the atlas since
+    // they don't have any pixels.
+    if (glyph.metrics.width == 0 || glyph.metrics.width >= 256 ||
+        glyph.metrics.height == 0 || glyph.metrics.height >= 256) {
         return Rect<uint16_t>{ 0, 0, 0, 0 };
     }
 
-    uint16_t buffered_width = glyph.metrics.width + buffer * 2;
-    uint16_t buffered_height = glyph.metrics.height + buffer * 2;
+    uint16_t buffered_width = glyph.metrics.width + SDFGlyph::borderSize * 2;
+    uint16_t buffered_height = glyph.metrics.height + SDFGlyph::borderSize * 2;
+
+    // Guard against mismatches between the glyph bitmap size and the size mandated by
+    // its metrics.
+    if (size_t(buffered_width * buffered_height) != glyph.bitmap.size()) {
+        return Rect<uint16_t>{ 0, 0, 0, 0 };
+    }
 
     // Add a 1px border around every image.
     const uint16_t padding = 1;
@@ -148,18 +150,20 @@ Rect<uint16_t> GlyphAtlas::addGlyph(uintptr_t tileUID,
         return rect;
     }
 
-    assert(rect.x + rect.w <= width);
-    assert(rect.y + rect.h <= height);
+    // Verify that binpack didn't produce a rect that goes beyond the size of the image.
+    // This should never happen.
+    assert(rect.x + rect.w <= image.size.width);
+    assert(rect.y + rect.h <= image.size.height);
 
     face.emplace(glyph.id, GlyphValue { rect, tileUID });
 
     // Copy the bitmap
     const uint8_t* source = reinterpret_cast<const uint8_t*>(glyph.bitmap.data());
     for (uint32_t y = 0; y < buffered_height; y++) {
-        uint32_t y1 = width * (rect.y + y + padding) + rect.x + padding;
+        uint32_t y1 = image.size.width * (rect.y + y + padding) + rect.x + padding;
         uint32_t y2 = buffered_width * y;
         for (uint32_t x = 0; x < buffered_width; x++) {
-            data[y1 + x] = source[y2 + x];
+            image.data[y1 + x] = source[y2 + x];
         }
     }
 
@@ -181,9 +185,9 @@ void GlyphAtlas::removeGlyphs(uintptr_t tileUID) {
                 const Rect<uint16_t>& rect = value.rect;
 
                 // Clear out the bitmap.
-                uint8_t *target = data.get();
+                uint8_t *target = image.data.get();
                 for (uint32_t y = 0; y < rect.h; y++) {
-                    uint32_t y1 = width * (rect.y + y) + rect.x;
+                    uint32_t y1 = image.size.width * (rect.y + y) + rect.x;
                     for (uint32_t x = 0; x < rect.w; x++) {
                         target[y1 + x] = 0;
                     }
@@ -203,60 +207,25 @@ void GlyphAtlas::removeGlyphs(uintptr_t tileUID) {
     }
 }
 
+Size GlyphAtlas::getSize() const {
+    return image.size;
+}
+
 void GlyphAtlas::upload(gl::Context& context, gl::TextureUnit unit) {
-    if (dirty) {
-        const bool first = !texture;
-        bind(context, unit);
+    std::lock_guard<std::mutex> lock(mtx);
 
-        std::lock_guard<std::mutex> lock(mtx);
-
-        context.activeTexture = unit;
-        if (first) {
-            MBGL_CHECK_ERROR(glTexImage2D(
-                GL_TEXTURE_2D, // GLenum target
-                0, // GLint level
-                GL_ALPHA, // GLint internalformat
-                width, // GLsizei width
-                height, // GLsizei height
-                0, // GLint border
-                GL_ALPHA, // GLenum format
-                GL_UNSIGNED_BYTE, // GLenum type
-                data.get() // const GLvoid* data
-            ));
-        } else {
-            MBGL_CHECK_ERROR(glTexSubImage2D(
-                GL_TEXTURE_2D, // GLenum target
-                0, // GLint level
-                0, // GLint xoffset
-                0, // GLint yoffset
-                width, // GLsizei width
-                height, // GLsizei height
-                GL_ALPHA, // GLenum format
-                GL_UNSIGNED_BYTE, // GLenum type
-                data.get() // const GLvoid* data
-            ));
-        }
-
-        dirty = false;
+    if (!texture) {
+        texture = context.createTexture(image, unit);
+    } else if (dirty) {
+        context.updateTexture(*texture, image, unit);
     }
+
+    dirty = false;
 }
 
 void GlyphAtlas::bind(gl::Context& context, gl::TextureUnit unit) {
-    if (!texture) {
-        texture = context.createTexture();
-        context.activeTexture = unit;
-        context.texture[unit] = *texture;
-#if not MBGL_USE_GLES2
-        MBGL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0));
-#endif
-        MBGL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
-        MBGL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-        MBGL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
-        MBGL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
-    } else if (context.texture[unit] != *texture) {
-        context.activeTexture = unit;
-        context.texture[unit] = *texture;
-    }
+    upload(context, unit);
+    context.bindTexture(*texture, unit, gl::TextureFilter::Linear);
 }
 
 } // namespace mbgl

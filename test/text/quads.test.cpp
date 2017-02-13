@@ -10,14 +10,14 @@ using namespace mbgl;
 using namespace mbgl::style;
 
 TEST(getIconQuads, normal) {
-    SymbolLayoutProperties layout;
+    SymbolLayoutProperties::Evaluated layout;
     Anchor anchor(2.0, 3.0, 0.0, 0.5f, 0);
     SpriteAtlasElement image = {
         Rect<uint16_t>( 0, 0, 15, 11 ),
         std::shared_ptr<const SpriteImage>(),
         1.0f
     };
-    PositionedIcon shapedIcon(image, -5.0, 6.0, -7.0, 8.0);
+    PositionedIcon shapedIcon(image, -5.0, 6.0, -7.0, 8.0, 0);
     GeometryCoordinates line;
     Shaping shapedText;
 
@@ -47,18 +47,18 @@ TEST(getIconQuads, style) {
         std::shared_ptr<const SpriteImage>(),
         1.0f
     };
-    PositionedIcon shapedIcon(image, -10.0, 10.0, -10.0, 10.0);
+    PositionedIcon shapedIcon(image, -10.0, 10.0, -10.0, 10.0, 0);
     GeometryCoordinates line;
     Shaping shapedText;
     shapedText.top = -10.0f;
     shapedText.bottom = 30.0f;
     shapedText.left = -60.0f;
     shapedText.right = 20.0f;
-    shapedText.positionedGlyphs.emplace_back(PositionedGlyph(32, 0.0f, 0.0f));
+    shapedText.positionedGlyphs.emplace_back(PositionedGlyph(32, 0.0f, 0.0f, 0));
 
     // none
     {
-        SymbolLayoutProperties layout;
+        SymbolLayoutProperties::Evaluated layout;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 
@@ -80,9 +80,9 @@ TEST(getIconQuads, style) {
 
     // width
     {
-        SymbolLayoutProperties layout;
-        layout.textSize = LayoutProperty<float>(24.0f);
-        layout.iconTextFit = LayoutProperty<IconTextFitType>(IconTextFitType::Width);
+        SymbolLayoutProperties::Evaluated layout;
+        layout.get<TextSize>() = 24.0f;
+        layout.get<IconTextFit>() = IconTextFitType::Width;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 
@@ -98,9 +98,9 @@ TEST(getIconQuads, style) {
 
     // width x textSize
     {
-        SymbolLayoutProperties layout;
-        layout.textSize = LayoutProperty<float>(12.0f);
-        layout.iconTextFit = LayoutProperty<IconTextFitType>(IconTextFitType::Width);
+        SymbolLayoutProperties::Evaluated layout;
+        layout.get<TextSize>() = 12.0f;
+        layout.get<IconTextFit>() = IconTextFitType::Width;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 
@@ -116,13 +116,13 @@ TEST(getIconQuads, style) {
 
     // width x textSize + padding
     {
-        SymbolLayoutProperties layout;
-        layout.textSize = LayoutProperty<float>(12.0f);
-        layout.iconTextFit = LayoutProperty<IconTextFitType>(IconTextFitType::Width);
-        layout.iconTextFitPadding.value[0] = 5.0f;
-        layout.iconTextFitPadding.value[1] = 10.0f;
-        layout.iconTextFitPadding.value[2] = 5.0f;
-        layout.iconTextFitPadding.value[3] = 10.0f;
+        SymbolLayoutProperties::Evaluated layout;
+        layout.get<TextSize>() = 12.0f;
+        layout.get<IconTextFit>() = IconTextFitType::Width;
+        layout.get<IconTextFitPadding>()[0] = 5.0f;
+        layout.get<IconTextFitPadding>()[1] = 10.0f;
+        layout.get<IconTextFitPadding>()[2] = 5.0f;
+        layout.get<IconTextFitPadding>()[3] = 10.0f;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 
@@ -138,9 +138,9 @@ TEST(getIconQuads, style) {
 
     // height
     {
-        SymbolLayoutProperties layout;
-        layout.textSize = LayoutProperty<float>(24.0f);
-        layout.iconTextFit = LayoutProperty<IconTextFitType>(IconTextFitType::Height);
+        SymbolLayoutProperties::Evaluated layout;
+        layout.get<TextSize>() = 24.0f;
+        layout.get<IconTextFit>() = IconTextFitType::Height;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 
@@ -156,9 +156,9 @@ TEST(getIconQuads, style) {
 
     // height x textSize
     {
-        SymbolLayoutProperties layout;
-        layout.textSize = LayoutProperty<float>(12.0f);
-        layout.iconTextFit = LayoutProperty<IconTextFitType>(IconTextFitType::Height);
+        SymbolLayoutProperties::Evaluated layout;
+        layout.get<TextSize>() = 12.0f;
+        layout.get<IconTextFit>() = IconTextFitType::Height;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 
@@ -174,13 +174,13 @@ TEST(getIconQuads, style) {
 
     // height x textSize + padding
     {
-        SymbolLayoutProperties layout;
-        layout.textSize = LayoutProperty<float>(12.0f);
-        layout.iconTextFit = LayoutProperty<IconTextFitType>(IconTextFitType::Height);
-        layout.iconTextFitPadding.value[0] = 5.0f;
-        layout.iconTextFitPadding.value[1] = 10.0f;
-        layout.iconTextFitPadding.value[2] = 5.0f;
-        layout.iconTextFitPadding.value[3] = 10.0f;
+        SymbolLayoutProperties::Evaluated layout;
+        layout.get<TextSize>() = 12.0f;
+        layout.get<IconTextFit>() = IconTextFitType::Height;
+        layout.get<IconTextFitPadding>()[0] = 5.0f;
+        layout.get<IconTextFitPadding>()[1] = 10.0f;
+        layout.get<IconTextFitPadding>()[2] = 5.0f;
+        layout.get<IconTextFitPadding>()[3] = 10.0f;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 
@@ -196,9 +196,9 @@ TEST(getIconQuads, style) {
 
     // both
     {
-        SymbolLayoutProperties layout;
-        layout.textSize = LayoutProperty<float>(24.0f);
-        layout.iconTextFit = LayoutProperty<IconTextFitType>(IconTextFitType::Both);
+        SymbolLayoutProperties::Evaluated layout;
+        layout.get<TextSize>() = 24.0f;
+        layout.get<IconTextFit>() = IconTextFitType::Both;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 
@@ -214,9 +214,9 @@ TEST(getIconQuads, style) {
 
     // both x textSize
     {
-        SymbolLayoutProperties layout;
-        layout.textSize = LayoutProperty<float>(12.0f);
-        layout.iconTextFit = LayoutProperty<IconTextFitType>(IconTextFitType::Both);
+        SymbolLayoutProperties::Evaluated layout;
+        layout.get<TextSize>() = 12.0f;
+        layout.get<IconTextFit>() = IconTextFitType::Both;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 
@@ -232,13 +232,13 @@ TEST(getIconQuads, style) {
 
     // both x textSize + padding
     {
-        SymbolLayoutProperties layout;
-        layout.textSize = LayoutProperty<float>(12.0f);
-        layout.iconTextFit = LayoutProperty<IconTextFitType>(IconTextFitType::Both);
-        layout.iconTextFitPadding.value[0] = 5.0f;
-        layout.iconTextFitPadding.value[1] = 10.0f;
-        layout.iconTextFitPadding.value[2] = 5.0f;
-        layout.iconTextFitPadding.value[3] = 10.0f;
+        SymbolLayoutProperties::Evaluated layout;
+        layout.get<TextSize>() = 12.0f;
+        layout.get<IconTextFit>() = IconTextFitType::Both;
+        layout.get<IconTextFitPadding>()[0] = 5.0f;
+        layout.get<IconTextFitPadding>()[1] = 10.0f;
+        layout.get<IconTextFitPadding>()[2] = 5.0f;
+        layout.get<IconTextFitPadding>()[3] = 10.0f;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 
@@ -254,13 +254,13 @@ TEST(getIconQuads, style) {
 
     // both x textSize + padding t/r/b/l
     {
-        SymbolLayoutProperties layout;
-        layout.textSize = LayoutProperty<float>(12.0f);
-        layout.iconTextFit = LayoutProperty<IconTextFitType>(IconTextFitType::Both);
-        layout.iconTextFitPadding.value[0] = 0.0f;
-        layout.iconTextFitPadding.value[1] = 5.0f;
-        layout.iconTextFitPadding.value[2] = 10.0f;
-        layout.iconTextFitPadding.value[3] = 15.0f;
+        SymbolLayoutProperties::Evaluated layout;
+        layout.get<TextSize>() = 12.0f;
+        layout.get<IconTextFit>() = IconTextFitType::Both;
+        layout.get<IconTextFitPadding>()[0] = 0.0f;
+        layout.get<IconTextFitPadding>()[1] = 5.0f;
+        layout.get<IconTextFitPadding>()[2] = 10.0f;
+        layout.get<IconTextFitPadding>()[3] = 15.0f;
         SymbolQuads quads =
             getIconQuads(anchor, shapedIcon, line, layout, SymbolPlacementType::Point, shapedText);
 

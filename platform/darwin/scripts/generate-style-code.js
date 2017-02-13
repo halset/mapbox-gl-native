@@ -4,10 +4,19 @@ const fs = require('fs');
 const ejs = require('ejs');
 const _ = require('lodash');
 const colorParser = require('csscolorparser');
+
+require('../../../scripts/style-code');
+
 const cocoaConventions = require('./style-spec-cocoa-conventions-v8.json');
-let spec = _.merge(require('mapbox-gl-style-spec').latest, require('./style-spec-overrides-v8.json'));
 const prefix = 'MGL';
 const suffix = 'StyleLayer';
+
+let spec = _.merge(require('../../../mapbox-gl-js/src/style-spec/reference/v8'), require('./style-spec-overrides-v8.json'));
+
+///
+// Temporarily IGNORE layers that are in the spec yet still not supported in mbgl core
+///
+delete spec.layer.type.values['fill-extrusion'];
 
 // Rename properties and keep `original` for use with setters and getters
 _.forOwn(cocoaConventions, function (properties, kind) {
@@ -22,7 +31,7 @@ _.forOwn(cocoaConventions, function (properties, kind) {
         }
         delete spec[kind][oldName];
         spec[kind][newName] = property;
-        
+
         // Update requirements in other properties.
         let updateRequirements = function (property, name) {
             let requires = property.requires || [];
@@ -148,7 +157,7 @@ global.mbglTestValue = function (property, layerType) {
             return `mbgl::style::${type}Type::${value}`;
         }
         case 'color':
-            return '{ .r = 1, .g = 0, .b = 0, .a = 1 }';
+            return '{ 1, 0, 0, 1 }';
         case 'array':
             switch (arrayType(property)) {
                 case 'dasharray':
@@ -216,7 +225,7 @@ global.testHelperMessage = function (property, layerType, isFunction) {
 };
 
 global.propertyDoc = function (propertyName, property, layerType, kind) {
-    // Match references to other property names & values. 
+    // Match references to other property names & values.
     // Requires the format 'When `foo` is set to `bar`,'.
     let doc = property.doc.replace(/`([^`]+?)` is set to `([^`]+?)`/g, function (m, peerPropertyName, propertyValue, offset, str) {
         let otherProperty = camelizeWithLeadingLowercase(peerPropertyName);
@@ -270,6 +279,30 @@ global.propertyDoc = function (propertyName, property, layerType, kind) {
                     break;
             }
             doc += `\n\nThis attribute corresponds to the <a href="https://www.mapbox.com/mapbox-gl-style-spec/#${anchor}"><code>${property.original}</code></a> layout property in the Mapbox Style Specification.`;
+        }
+        doc += '\n\nYou can set this property to an instance of:\n\n' +
+            '* `MGLStyleConstantValue`\n';
+        if (property["property-function"]) {
+            doc += '* `MGLCameraStyleFunction` with an interpolation mode of:\n' +
+                '  * `MGLInterpolationModeExponential`\n' +
+                '  * `MGLInterpolationModeInterval`\n' +
+                '* `MGLSourceStyleFunction` with an interpolation mode of:\n' +
+                '  * `MGLInterpolationModeExponential`\n' +
+                '  * `MGLInterpolationModeInterval`\n' +
+                '  * `MGLInterpolationModeCategorical`\n' +
+                '  * `MGLInterpolationModeIdentity`\n' +
+                '* `MGLCompositeStyleFunction` with an interpolation mode of:\n' +
+                '  * `MGLInterpolationModeExponential`\n' +
+                '  * `MGLInterpolationModeInterval`\n' +
+                '  * `MGLInterpolationModeCategorical`\n';
+        } else {
+            if (property.function === "interpolated") {
+                doc += '* `MGLCameraStyleFunction` with an interpolation mode of:\n' +
+                    '  * `MGLInterpolationModeExponential`\n' +
+                    '  * `MGLInterpolationModeInterval`\n';
+            } else {
+                doc += '* `MGLCameraStyleFunction` with an interpolation mode of `MGLInterpolationModeInterval`\n';
+            }
         }
     }
     return doc;
@@ -552,7 +585,7 @@ for (var layer of layers) {
     if (enumProperties.length) {
         layer.enumProperties = enumProperties;
     }
-    
+
     let renamedProperties = {};
     _.assign(renamedProperties, _.filter(layer.properties, prop => 'original' in prop || 'getter' in prop));
     if (!_.isEmpty(renamedProperties)) {
