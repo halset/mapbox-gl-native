@@ -7,27 +7,39 @@
 
 namespace mbgl {
 
-struct Anchor;
+class Anchor;
 class IndexedSubfeature;
 
 class SymbolInstance {
 public:
-    explicit SymbolInstance(Anchor& anchor, const GeometryCoordinates& line,
-            const std::pair<Shaping, Shaping>& shapedTextOrientations, const PositionedIcon& shapedIcon,
-            const style::SymbolLayoutProperties::Evaluated&, const bool inside, const uint32_t index,
-            const float textBoxScale, const float textPadding, style::SymbolPlacementType textPlacement,
-            const float iconBoxScale, const float iconPadding, style::SymbolPlacementType iconPlacement,
-            const GlyphPositions& face, const IndexedSubfeature& indexedfeature);
+    SymbolInstance(Anchor& anchor,
+                   const GeometryCoordinates& line,
+                   const std::pair<Shaping, Shaping>& shapedTextOrientations,
+                   optional<PositionedIcon> shapedIcon,
+                   const style::SymbolLayoutProperties::Evaluated&,
+                   const float layoutTextSize,
+                   const bool inside,
+                   const uint32_t index,
+                   const float textBoxScale,
+                   const float textPadding,
+                   style::SymbolPlacementType textPlacement,
+                   const float iconBoxScale,
+                   const float iconPadding,
+                   style::SymbolPlacementType iconPlacement,
+                   const GlyphPositions& face,
+                   const IndexedSubfeature&,
+                   const std::size_t featureIndex);
 
     Point<float> point;
     uint32_t index;
     bool hasText;
     bool hasIcon;
     SymbolQuads glyphQuads;
-    SymbolQuads iconQuads;
+    optional<SymbolQuad> iconQuad;
     CollisionFeature textCollisionFeature;
     CollisionFeature iconCollisionFeature;
     WritingModeType writingModes;
+    std::size_t featureIndex;
 };
 
 } // namespace mbgl

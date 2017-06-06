@@ -1,11 +1,13 @@
 #import "MGLOfflineStorage_Private.h"
 
+#import "MGLFoundation_Private.h"
 #import "MGLAccountManager_Private.h"
 #import "MGLGeometry_Private.h"
 #import "MGLNetworkConfiguration.h"
 #import "MGLOfflinePack_Private.h"
 #import "MGLOfflineRegion_Private.h"
 #import "MGLTilePyramidOfflineRegion.h"
+#import "NSBundle+MGLAdditions.h"
 #import "NSValue+MGLAdditions.h"
 
 #include <mbgl/util/string.hpp>
@@ -32,6 +34,7 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
 
 @property (nonatomic, strong, readwrite) NS_MUTABLE_ARRAY_OF(MGLOfflinePack *) *packs;
 @property (nonatomic) mbgl::DefaultFileSource *mbglFileSource;
+@property (nonatomic, getter=isPaused) BOOL paused;
 
 @end
 
@@ -42,9 +45,75 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
     static MGLOfflineStorage *sharedOfflineStorage;
     dispatch_once(&onceToken, ^{
         sharedOfflineStorage = [[self alloc] init];
+#if TARGET_OS_IPHONE || TARGET_OS_SIMULATOR
+        [[NSNotificationCenter defaultCenter] addObserver:sharedOfflineStorage selector:@selector(unpauseFileSource:) name:UIApplicationWillEnterForegroundNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:sharedOfflineStorage selector:@selector(pauseFileSource:) name:UIApplicationDidEnterBackgroundNotification object:nil];
+#endif
         [sharedOfflineStorage reloadPacks];
     });
+
     return sharedOfflineStorage;
+}
+
+#if TARGET_OS_IPHONE || TARGET_OS_SIMULATOR
+- (void)pauseFileSource:(__unused NSNotification *)notification {
+    if (self.isPaused) {
+        return;
+    }
+    _mbglFileSource->pause();
+    self.paused = YES;
+}
+
+- (void)unpauseFileSource:(__unused NSNotification *)notification {
+    if (!self.isPaused) {
+        return;
+    }
+    _mbglFileSource->resume();
+    self.paused = NO;
+}
+#endif
+
+- (void)setDelegate:(id<MGLOfflineStorageDelegate>)newValue {
+    _delegate = newValue;
+    if ([self.delegate respondsToSelector:@selector(offlineStorage:URLForResourceOfKind:withURL:)]) {
+        _mbglFileSource->setResourceTransform([offlineStorage = self](auto kind_, std::string&& url_) -> std::string {
+            NSURL* url =
+            [NSURL URLWithString:[[NSString alloc] initWithBytes:url_.data()
+                                                          length:url_.length()
+                                                        encoding:NSUTF8StringEncoding]];
+            MGLResourceKind kind = MGLResourceKindUnknown;
+            switch (kind_) {
+                case mbgl::Resource::Kind::Tile:
+                    kind = MGLResourceKindTile;
+                    break;
+                case mbgl::Resource::Kind::Glyphs:
+                    kind = MGLResourceKindGlyphs;
+                    break;
+                case mbgl::Resource::Kind::Style:
+                    kind = MGLResourceKindStyle;
+                    break;
+                case mbgl::Resource::Kind::Source:
+                    kind = MGLResourceKindSource;
+                    break;
+                case mbgl::Resource::Kind::SpriteImage:
+                    kind = MGLResourceKindSpriteImage;
+                    break;
+                case mbgl::Resource::Kind::SpriteJSON:
+                    kind = MGLResourceKindSpriteJSON;
+                    break;
+                case mbgl::Resource::Kind::Unknown:
+                    kind = MGLResourceKindUnknown;
+                    break;
+
+            }
+            url = [offlineStorage.delegate offlineStorage:offlineStorage
+                                     URLForResourceOfKind:kind
+                                                  withURL:url];
+            return url.absoluteString.UTF8String;
+        });
+    } else {
+        _mbglFileSource->setResourceTransform(nullptr);
+    }
 }
 
 /**
@@ -66,7 +135,7 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
                                                              appropriateForURL:nil
                                                                         create:YES
                                                                          error:nil];
-    NSString *bundleIdentifier = [self bundleIdentifier];
+    NSString *bundleIdentifier = [NSBundle mgl_applicationBundleIdentifier];
     if (!bundleIdentifier) {
         // There’s no main bundle identifier when running in a unit test bundle.
         bundleIdentifier = [NSBundle bundleForClass:self].bundleIdentifier;
@@ -100,7 +169,7 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
     NSString *legacyCachePath = [legacyPaths.firstObject stringByAppendingPathComponent:MGLOfflineStorageFileName3_2_0_beta_1];
 #elif TARGET_OS_MAC
     // ~/Library/Caches/tld.app.bundle.id/offline.db
-    NSString *bundleIdentifier = [self bundleIdentifier];
+    NSString *bundleIdentifier = [NSBundle mgl_applicationBundleIdentifier];
     NSURL *legacyCacheDirectoryURL = [[NSFileManager defaultManager] URLForDirectory:NSCachesDirectory
                                                                             inDomain:NSUserDomainMask
                                                                    appropriateForURL:nil
@@ -114,6 +183,8 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
 }
 
 - (instancetype)init {
+    MGLInitializeRunLoop();
+
     if (self = [super init]) {
         NSURL *cacheURL = [[self class] cacheURLIncludingSubdirectory:YES];
         NSString *cachePath = cacheURL.path ?: @"";
@@ -151,16 +222,8 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
     return self;
 }
 
-+ (NSString *)bundleIdentifier {
-    NSString *bundleIdentifier = [NSBundle mainBundle].bundleIdentifier;
-    if (!bundleIdentifier) {
-        // There’s no main bundle identifier when running in a unit test bundle.
-        bundleIdentifier = [NSBundle bundleForClass:self].bundleIdentifier;
-    }
-    return bundleIdentifier;
-}
-
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     [[MGLNetworkConfiguration sharedManager] removeObserver:self forKeyPath:@"apiBaseURL"];
     [[MGLAccountManager sharedManager] removeObserver:self forKeyPath:@"accessToken"];
 

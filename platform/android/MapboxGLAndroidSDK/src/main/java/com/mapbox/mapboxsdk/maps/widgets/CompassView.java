@@ -2,9 +2,9 @@ package com.mapbox.mapboxsdk.maps.widgets;
 
 import android.content.Context;
 import android.graphics.PointF;
+import android.graphics.drawable.Drawable;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.content.ContextCompat;
 import android.support.v4.view.ViewCompat;
 import android.support.v4.view.ViewPropertyAnimatorCompat;
 import android.support.v4.view.ViewPropertyAnimatorListenerAdapter;
@@ -13,7 +13,6 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.mapbox.mapboxsdk.R;
 import com.mapbox.mapboxsdk.maps.FocalPointChangeListener;
 import com.mapbox.mapboxsdk.maps.MapboxMap;
 
@@ -34,7 +33,7 @@ public final class CompassView extends AppCompatImageView implements Runnable, F
   private static final long TIME_FADE_ANIMATION = TIME_WAIT_IDLE;
   private static final long TIME_MAP_NORTH_ANIMATION = 150;
 
-  private double direction = 0.0;
+  private float rotation = 0.0f;
   private boolean fadeCompassViewFacingNorth = true;
   private ViewPropertyAnimatorCompat fadeAnimator;
   private PointF focalPoint;
@@ -55,8 +54,6 @@ public final class CompassView extends AppCompatImageView implements Runnable, F
   }
 
   private void initialize(Context context) {
-    setImageDrawable(ContextCompat.getDrawable(getContext(), R.drawable.mapbox_compass_icon));
-    setContentDescription(getResources().getString(R.string.mapbox_compassContentDescription));
     setEnabled(false);
 
     // Layout params
@@ -82,8 +79,8 @@ public final class CompassView extends AppCompatImageView implements Runnable, F
   }
 
   public boolean isFacingNorth() {
-    // increase range more than just 0.0
-    return direction >= 359.0 || direction <= 1.0;
+    // increase range of facing north to more than only 0.0
+    return Math.abs(rotation) >= 359.0 || Math.abs(rotation) <= 1.0;
   }
 
   @Override
@@ -105,8 +102,13 @@ public final class CompassView extends AppCompatImageView implements Runnable, F
     return focalPoint;
   }
 
-  public void update(final double direction) {
-    this.direction = direction;
+  /**
+   * Updates the direction of the compass.
+   *
+   * @param bearing the direction value of the map
+   */
+  public void update(final double bearing) {
+    rotation = (float) bearing;
 
     if (!isEnabled()) {
       return;
@@ -124,7 +126,7 @@ public final class CompassView extends AppCompatImageView implements Runnable, F
       setVisibility(View.VISIBLE);
     }
 
-    setRotation((float) direction);
+    setRotation(rotation);
   }
 
   public void fadeCompassViewFacingNorth(boolean compassFadeFacingNorth) {
@@ -133,6 +135,24 @@ public final class CompassView extends AppCompatImageView implements Runnable, F
 
   public boolean isFadeCompassViewFacingNorth() {
     return fadeCompassViewFacingNorth;
+  }
+
+  /**
+   * Set the CompassView image.
+   *
+   * @param compass the drawable to use as compass image
+   */
+  public void setCompassImage(Drawable compass) {
+    setImageDrawable(compass);
+  }
+
+  /**
+   * Get the current configured CompassView image.
+   *
+   * @return the drawable used as compass image
+   */
+  public Drawable getCompassImage() {
+    return getDrawable();
   }
 
   @Override

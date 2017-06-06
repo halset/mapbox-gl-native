@@ -1,7 +1,7 @@
 include(platform/qt/qt.cmake)
 
 mason_use(sqlite VERSION 3.14.2)
-mason_use(gtest VERSION 1.8.0)
+mason_use(gtest VERSION 1.8.0${MASON_CXXABI_SUFFIX})
 
 if(NOT WITH_QT_DECODERS)
     mason_use(libjpeg-turbo VERSION 1.5.0)
@@ -10,7 +10,7 @@ if(NOT WITH_QT_DECODERS)
 endif()
 
 if(NOT WITH_QT_I18N)
-    mason_use(icu VERSION 58.1)
+    mason_use(icu VERSION 58.1-min-size)
 endif()
 
 macro(mbgl_platform_core)
@@ -72,7 +72,7 @@ macro(mbgl_platform_test)
 
     target_link_libraries(mbgl-test
         PRIVATE qmapboxgl
-        ${MBGL_QT_LIBRARIES}
+        ${MBGL_QT_TEST_LIBRARIES}
     )
 endmacro()
 

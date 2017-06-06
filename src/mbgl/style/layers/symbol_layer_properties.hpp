@@ -5,6 +5,7 @@
 #include <mbgl/style/types.hpp>
 #include <mbgl/style/layout_property.hpp>
 #include <mbgl/style/paint_property.hpp>
+#include <mbgl/style/properties.hpp>
 #include <mbgl/programs/attributes.hpp>
 
 namespace mbgl {
@@ -45,7 +46,7 @@ struct IconRotationAlignment : LayoutProperty<AlignmentType> {
     static AlignmentType defaultValue() { return AlignmentType::Auto; }
 };
 
-struct IconSize : LayoutProperty<float> {
+struct IconSize : DataDrivenLayoutProperty<float> {
     static constexpr const char * key = "icon-size";
     static float defaultValue() { return 1; }
 };
@@ -60,7 +61,7 @@ struct IconTextFitPadding : LayoutProperty<std::array<float, 4>> {
     static std::array<float, 4> defaultValue() { return {{ 0, 0, 0, 0 }}; }
 };
 
-struct IconImage : LayoutProperty<std::string> {
+struct IconImage : DataDrivenLayoutProperty<std::string> {
     static constexpr const char * key = "icon-image";
     static std::string defaultValue() { return ""; }
 };
@@ -95,7 +96,7 @@ struct TextRotationAlignment : LayoutProperty<AlignmentType> {
     static AlignmentType defaultValue() { return AlignmentType::Auto; }
 };
 
-struct TextField : LayoutProperty<std::string> {
+struct TextField : DataDrivenLayoutProperty<std::string> {
     static constexpr const char * key = "text-field";
     static std::string defaultValue() { return ""; }
 };
@@ -105,7 +106,7 @@ struct TextFont : LayoutProperty<std::vector<std::string>> {
     static std::vector<std::string> defaultValue() { return { "Open Sans Regular", "Arial Unicode MS Regular" }; }
 };
 
-struct TextSize : LayoutProperty<float> {
+struct TextSize : DataDrivenLayoutProperty<float> {
     static constexpr const char * key = "text-size";
     static float defaultValue() { return 16; }
 };
@@ -140,7 +141,7 @@ struct TextMaxAngle : LayoutProperty<float> {
     static float defaultValue() { return 45; }
 };
 
-struct TextRotate : LayoutProperty<float> {
+struct TextRotate : DataDrivenLayoutProperty<float> {
     static constexpr const char * key = "text-rotate";
     static float defaultValue() { return 0; }
 };
@@ -155,12 +156,12 @@ struct TextKeepUpright : LayoutProperty<bool> {
     static bool defaultValue() { return true; }
 };
 
-struct TextTransform : LayoutProperty<TextTransformType> {
+struct TextTransform : DataDrivenLayoutProperty<TextTransformType> {
     static constexpr const char * key = "text-transform";
     static TextTransformType defaultValue() { return TextTransformType::None; }
 };
 
-struct TextOffset : LayoutProperty<std::array<float, 2>> {
+struct TextOffset : DataDrivenLayoutProperty<std::array<float, 2>> {
     static constexpr const char * key = "text-offset";
     static std::array<float, 2> defaultValue() { return {{ 0, 0 }}; }
 };
@@ -180,23 +181,23 @@ struct TextOptional : LayoutProperty<bool> {
     static bool defaultValue() { return false; }
 };
 
-struct IconOpacity : PaintProperty<float> {
+struct IconOpacity : DataDrivenPaintProperty<float, attributes::a_opacity> {
     static float defaultValue() { return 1; }
 };
 
-struct IconColor : PaintProperty<Color> {
+struct IconColor : DataDrivenPaintProperty<Color, attributes::a_fill_color> {
     static Color defaultValue() { return Color::black(); }
 };
 
-struct IconHaloColor : PaintProperty<Color> {
+struct IconHaloColor : DataDrivenPaintProperty<Color, attributes::a_halo_color> {
     static Color defaultValue() { return {}; }
 };
 
-struct IconHaloWidth : PaintProperty<float> {
+struct IconHaloWidth : DataDrivenPaintProperty<float, attributes::a_halo_width> {
     static float defaultValue() { return 0; }
 };
 
-struct IconHaloBlur : PaintProperty<float> {
+struct IconHaloBlur : DataDrivenPaintProperty<float, attributes::a_halo_blur> {
     static float defaultValue() { return 0; }
 };
 
@@ -208,23 +209,23 @@ struct IconTranslateAnchor : PaintProperty<TranslateAnchorType> {
     static TranslateAnchorType defaultValue() { return TranslateAnchorType::Map; }
 };
 
-struct TextOpacity : PaintProperty<float> {
+struct TextOpacity : DataDrivenPaintProperty<float, attributes::a_opacity> {
     static float defaultValue() { return 1; }
 };
 
-struct TextColor : PaintProperty<Color> {
+struct TextColor : DataDrivenPaintProperty<Color, attributes::a_fill_color> {
     static Color defaultValue() { return Color::black(); }
 };
 
-struct TextHaloColor : PaintProperty<Color> {
+struct TextHaloColor : DataDrivenPaintProperty<Color, attributes::a_halo_color> {
     static Color defaultValue() { return {}; }
 };
 
-struct TextHaloWidth : PaintProperty<float> {
+struct TextHaloWidth : DataDrivenPaintProperty<float, attributes::a_halo_width> {
     static float defaultValue() { return 0; }
 };
 
-struct TextHaloBlur : PaintProperty<float> {
+struct TextHaloBlur : DataDrivenPaintProperty<float, attributes::a_halo_blur> {
     static float defaultValue() { return 0; }
 };
 
@@ -236,7 +237,7 @@ struct TextTranslateAnchor : PaintProperty<TranslateAnchorType> {
     static TranslateAnchorType defaultValue() { return TranslateAnchorType::Map; }
 };
 
-class SymbolLayoutProperties : public LayoutProperties<
+class SymbolLayoutProperties : public Properties<
     SymbolPlacement,
     SymbolSpacing,
     SymbolAvoidEdges,
@@ -273,7 +274,7 @@ class SymbolLayoutProperties : public LayoutProperties<
     TextOptional
 > {};
 
-class SymbolPaintProperties : public PaintProperties<
+class SymbolPaintProperties : public Properties<
     IconOpacity,
     IconColor,
     IconHaloColor,

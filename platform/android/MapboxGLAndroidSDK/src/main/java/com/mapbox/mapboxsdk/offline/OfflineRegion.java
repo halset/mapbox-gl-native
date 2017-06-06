@@ -4,8 +4,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.IntDef;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 
-import timber.log.Timber;
+import com.mapbox.mapboxsdk.LibraryLoader;
+import com.mapbox.mapboxsdk.storage.FileSource;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -22,25 +24,31 @@ public class OfflineRegion {
   //
 
   static {
-    System.loadLibrary("mapbox-gl");
+    LibraryLoader.load();
   }
 
-  // Parent OfflineManager
-  private OfflineManager offlineManager;
-
   // Members
-  private long mId = 0;
-  private OfflineRegionDefinition mDefinition = null;
+
+  // Holds the pointer to JNI OfflineRegion
+  private long nativePtr;
+
+  // Holds a reference to the FileSource to keep it alive
+  private FileSource fileSource;
+
+  //Region id
+  private long id;
+
+  // delete status
+  private boolean isDeleted;
+
+  private OfflineRegionDefinition definition;
 
   /**
    * Arbitrary binary region metadata. The contents are opaque to the SDK implementation;
    * it just stores and retrieves a byte[]. Check the `OfflineActivity` in the TestApp
    * for a sample implementation that uses JSON to store an offline region name.
    */
-  private byte[] mMetadata = null;
-
-  // Holds the pointer to JNI OfflineRegion
-  private long mOfflineRegionPtr = 0;
+  private byte[] metadata;
 
   // Makes sure callbacks come back to the main thread
   private Handler handler;
@@ -91,7 +99,7 @@ public class OfflineRegion {
   }
 
   /**
-   * This callback receives an asynchronous response containing the {@link OfflineRegionStatus}
+   * This callback receives an asynchronous response containing the OfflineRegionStatus
    * of the offline region, or a {@link String} error message otherwise.
    */
   public interface OfflineRegionStatusCallback {
@@ -197,19 +205,22 @@ public class OfflineRegion {
     if (state == STATE_ACTIVE) {
       return true;
     }
-    if (isDeliveringInactiveMessages()) {
-      return true;
-    }
-    return false;
+    return isDeliveringInactiveMessages();
   }
 
-  /*
+  /**
    * Constructor
+   * <p>
+   * For JNI use only, to create a new offline region, use
+   * {@link OfflineManager#createOfflineRegion} instead.
    */
-
-  private OfflineRegion() {
-    // For JNI use only, to create a new offline region, use
-    // OfflineManager.createOfflineRegion() instead.
+  private OfflineRegion(long offlineRegionPtr, FileSource fileSource, long id,
+                        OfflineRegionDefinition definition, byte[] metadata) {
+    this.fileSource = fileSource;
+    this.id = id;
+    this.definition = definition;
+    this.metadata = metadata;
+    initialize(offlineRegionPtr, fileSource);
   }
 
   /*
@@ -217,15 +228,15 @@ public class OfflineRegion {
    */
 
   public long getID() {
-    return mId;
+    return id;
   }
 
   public OfflineRegionDefinition getDefinition() {
-    return mDefinition;
+    return definition;
   }
 
   public byte[] getMetadata() {
-    return mMetadata;
+    return metadata;
   }
 
   private Handler getHandler() {
@@ -241,7 +252,7 @@ public class OfflineRegion {
    *
    * @param observer the observer to be notified
    */
-  public void setObserver(@NonNull final OfflineRegionObserver observer) {
+  public void setObserver(@Nullable final OfflineRegionObserver observer) {
     setOfflineRegionObserver(new OfflineRegionObserver() {
       @Override
       public void onStatusChanged(final OfflineRegionStatus status) {
@@ -249,7 +260,9 @@ public class OfflineRegion {
           getHandler().post(new Runnable() {
             @Override
             public void run() {
-              observer.onStatusChanged(status);
+              if (observer != null) {
+                observer.onStatusChanged(status);
+              }
             }
           });
         }
@@ -261,7 +274,9 @@ public class OfflineRegion {
           getHandler().post(new Runnable() {
             @Override
             public void run() {
-              observer.onError(error);
+              if (observer != null) {
+                observer.onError(error);
+              }
             }
           });
         }
@@ -273,7 +288,9 @@ public class OfflineRegion {
           getHandler().post(new Runnable() {
             @Override
             public void run() {
-              observer.mapboxTileCountLimitExceeded(limit);
+              if (observer != null) {
+                observer.mapboxTileCountLimitExceeded(limit);
+              }
             }
           });
         }
@@ -340,28 +357,31 @@ public class OfflineRegion {
    * @param callback the callback to be invoked
    */
   public void delete(@NonNull final OfflineRegionDeleteCallback callback) {
-    deleteOfflineRegion(new OfflineRegionDeleteCallback() {
-      @Override
-      public void onDelete() {
-        getHandler().post(new Runnable() {
-          @Override
-          public void run() {
-            callback.onDelete();
-            OfflineRegion.this.finalize();
-          }
-        });
-      }
+    if (!isDeleted) {
+      deleteOfflineRegion(new OfflineRegionDeleteCallback() {
+        @Override
+        public void onDelete() {
+          isDeleted = true;
+          getHandler().post(new Runnable() {
+            @Override
+            public void run() {
+              callback.onDelete();
+              OfflineRegion.this.finalize();
+            }
+          });
+        }
 
-      @Override
-      public void onError(final String error) {
-        getHandler().post(new Runnable() {
-          @Override
-          public void run() {
-            callback.onError(error);
-          }
-        });
-      }
-    });
+        @Override
+        public void onError(final String error) {
+          getHandler().post(new Runnable() {
+            @Override
+            public void run() {
+              callback.onError(error);
+            }
+          });
+        }
+      });
+    }
   }
 
   /**
@@ -383,7 +403,7 @@ public class OfflineRegion {
         getHandler().post(new Runnable() {
           @Override
           public void run() {
-            mMetadata = metadata;
+            OfflineRegion.this.metadata = metadata;
             callback.onUpdate(metadata);
           }
         });
@@ -401,33 +421,18 @@ public class OfflineRegion {
     });
   }
 
+  private native void initialize(long offlineRegionPtr, FileSource fileSource);
+
   @Override
-  protected void finalize() {
-    try {
-      super.finalize();
-      destroyOfflineRegion();
-    } catch (Throwable throwable) {
-      Timber.e("Failed to finalize OfflineRegion: " + throwable.getMessage());
-    }
-  }
+  protected native void finalize();
 
-  /*
-   * Native methods
-   */
+  private native void setOfflineRegionObserver(OfflineRegionObserver callback);
 
-  private native void destroyOfflineRegion();
+  private native void setOfflineRegionDownloadState(@DownloadState int offlineRegionDownloadState);
 
-  private native void setOfflineRegionObserver(
-    OfflineRegionObserver observerCallback);
+  private native void getOfflineRegionStatus(OfflineRegionStatusCallback callback);
 
-  private native void setOfflineRegionDownloadState(
-    @DownloadState int offlineRegionDownloadState);
-
-  private native void getOfflineRegionStatus(
-    OfflineRegionStatusCallback statusCallback);
-
-  private native void deleteOfflineRegion(
-    OfflineRegionDeleteCallback deleteCallback);
+  private native void deleteOfflineRegion(OfflineRegionDeleteCallback callback);
 
   private native void updateOfflineRegionMetadata(byte[] metadata, OfflineRegionUpdateMetadataCallback callback);
 

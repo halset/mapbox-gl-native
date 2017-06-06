@@ -33,6 +33,12 @@ import java.util.ArrayList;
 
 import timber.log.Timber;
 
+/**
+ * Test activity showcasing the Offline API.
+ * <p>
+ * Shows a map of Manhattan and allows the user to download and name a region.
+ * </p>
+ */
 public class OfflineActivity extends AppCompatActivity
   implements OfflineDownloadRegionDialog.DownloadRegionDialogListener {
 
@@ -260,6 +266,7 @@ public class OfflineActivity extends AppCompatActivity
         if (status.isComplete()) {
           // Download complete
           endProgress("Region downloaded successfully.");
+          offlineRegion.setObserver(null);
           return;
         } else if (status.isRequiredResourceCountPrecise()) {
           // Switch to determinate state
@@ -267,21 +274,20 @@ public class OfflineActivity extends AppCompatActivity
         }
 
         // Debug
-        Timber.d(String.format("%s/%s resources; %s bytes downloaded.",
+        Timber.d("%s/%s resources; %s bytes downloaded.",
           String.valueOf(status.getCompletedResourceCount()),
           String.valueOf(status.getRequiredResourceCount()),
-          String.valueOf(status.getCompletedResourceSize())));
+          String.valueOf(status.getCompletedResourceSize()));
       }
 
       @Override
       public void onError(OfflineRegionError error) {
-        Timber.e("onError reason: " + error.getReason());
-        Timber.e("onError message: " + error.getMessage());
+        Timber.e("onError: %s, %s", error.getReason(), error.getMessage());
       }
 
       @Override
       public void mapboxTileCountLimitExceeded(long limit) {
-        Timber.e("Mapbox tile count limit exceeded: " + limit);
+        Timber.e("Mapbox tile count limit exceeded: %s", limit);
       }
     });
 

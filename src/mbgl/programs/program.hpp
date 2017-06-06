@@ -1,12 +1,13 @@
 #pragma once
 
 #include <mbgl/gl/program.hpp>
-#include <mbgl/programs/program_parameters.hpp>
+#include <mbgl/gl/features.hpp>
+#include <mbgl/programs/binary_program.hpp>
 #include <mbgl/programs/attributes.hpp>
+#include <mbgl/programs/program_parameters.hpp>
 #include <mbgl/style/paint_property.hpp>
-
-#include <sstream>
-#include <cassert>
+#include <mbgl/shaders/shaders.hpp>
+#include <mbgl/util/io.hpp>
 
 namespace mbgl {
 
@@ -33,28 +34,12 @@ public:
     ProgramType program;
 
     Program(gl::Context& context, const ProgramParameters& programParameters)
-        : program(context, vertexSource(programParameters), fragmentSource(programParameters))
-        {}
-
-    static std::string pixelRatioDefine(const ProgramParameters& parameters) {
-        std::ostringstream pixelRatioSS;
-        pixelRatioSS.imbue(std::locale("C"));
-        pixelRatioSS.setf(std::ios_base::showpoint);
-        pixelRatioSS << parameters.pixelRatio;
-        return std::string("#define DEVICE_PIXEL_RATIO ") + pixelRatioSS.str() + "\n";
-    }
-
-    static std::string fragmentSource(const ProgramParameters& parameters) {
-        std::string source = pixelRatioDefine(parameters) + Shaders::fragmentSource;
-        if (parameters.overdraw) {
-            assert(source.find("#ifdef OVERDRAW_INSPECTOR") != std::string::npos);
-            source.replace(source.find_first_of('\n'), 1, "\n#define OVERDRAW_INSPECTOR\n");
-        }
-        return source;
-    }
-
-    static std::string vertexSource(const ProgramParameters& parameters) {
-        return pixelRatioDefine(parameters) + Shaders::vertexSource;
+        : program(ProgramType::createProgram(
+            context,
+            programParameters,
+            Shaders::name,
+            Shaders::vertexSource,
+            Shaders::fragmentSource)) {
     }
 
     template <class DrawMode>
@@ -68,7 +53,7 @@ public:
               const gl::IndexBuffer<DrawMode>& indexBuffer,
               const gl::SegmentVector<Attributes>& segments,
               const PaintPropertyBinders& paintPropertyBinders,
-              const typename PaintProperties::Evaluated& currentProperties,
+              const typename PaintProperties::PossiblyEvaluated& currentProperties,
               float currentZoom) {
         program.draw(
             context,

@@ -4,7 +4,6 @@
 #include <mbgl/annotation/symbol_annotation_impl.hpp>
 #include <mbgl/annotation/line_annotation_impl.hpp>
 #include <mbgl/annotation/fill_annotation_impl.hpp>
-#include <mbgl/annotation/style_sourced_annotation_impl.hpp>
 #include <mbgl/style/style.hpp>
 #include <mbgl/style/layers/symbol_layer.hpp>
 #include <mbgl/style/layers/symbol_layer_impl.hpp>
@@ -19,23 +18,7 @@ using namespace style;
 const std::string AnnotationManager::SourceID = "com.mapbox.annotations";
 const std::string AnnotationManager::PointLayerID = "com.mapbox.annotations.points";
 
-AnnotationManager::AnnotationManager(float pixelRatio)
-    : spriteAtlas({ 1024, 1024 }, pixelRatio) {
-
-    struct NullFileSource : public FileSource {
-        std::unique_ptr<AsyncRequest> request(const Resource&, Callback) override {
-            assert(false);
-            return nullptr;
-        }
-    };
-
-    NullFileSource nullFileSource;
-
-    // This is a special atlas, holding only images added via addIcon. But we need its isLoaded()
-    // method to return true.
-    spriteAtlas.load("", nullFileSource);
-}
-
+AnnotationManager::AnnotationManager() = default;
 AnnotationManager::~AnnotationManager() = default;
 
 AnnotationID AnnotationManager::addAnnotation(const Annotation& annotation, const uint8_t maxZoom) {
@@ -79,12 +62,6 @@ void AnnotationManager::add(const AnnotationID& id, const LineAnnotation& annota
 void AnnotationManager::add(const AnnotationID& id, const FillAnnotation& annotation, const uint8_t maxZoom) {
     ShapeAnnotationImpl& impl = *shapeAnnotations.emplace(id,
         std::make_unique<FillAnnotationImpl>(id, annotation, maxZoom)).first->second;
-    obsoleteShapeAnnotationLayers.erase(impl.layerID);
-}
-
-void AnnotationManager::add(const AnnotationID& id, const StyleSourcedAnnotation& annotation, const uint8_t maxZoom) {
-    ShapeAnnotationImpl& impl = *shapeAnnotations.emplace(id,
-        std::make_unique<StyleSourcedAnnotationImpl>(id, annotation, maxZoom)).first->second;
     obsoleteShapeAnnotationLayers.erase(impl.layerID);
 }
 
@@ -134,16 +111,6 @@ Update AnnotationManager::update(const AnnotationID& id, const FillAnnotation& a
     return Update::AnnotationData | Update::AnnotationStyle;
 }
 
-Update AnnotationManager::update(const AnnotationID& id, const StyleSourcedAnnotation& annotation, const uint8_t maxZoom) {
-    auto it = shapeAnnotations.find(id);
-    if (it == shapeAnnotations.end()) {
-        assert(false); // Attempt to update a non-existent shape annotation
-        return Update::Nothing;
-    }
-    removeAndAdd(id, annotation, maxZoom);
-    return Update::AnnotationData | Update::AnnotationStyle;
-}
-
 void AnnotationManager::removeAndAdd(const AnnotationID& id, const Annotation& annotation, const uint8_t maxZoom) {
     removeAnnotation(id);
     Annotation::visit(annotation, [&] (const auto& annotation_) {
@@ -176,18 +143,14 @@ std::unique_ptr<AnnotationTileData> AnnotationManager::getTileData(const Canonic
 void AnnotationManager::updateStyle(Style& style) {
     // Create annotation source, point layer, and point bucket
     if (!style.getSource(SourceID)) {
-        std::unique_ptr<Source> source = std::make_unique<AnnotationSource>();
-        source->baseImpl->enabled = true;
-        style.addSource(std::move(source));
+        style.addSource(std::make_unique<AnnotationSource>());
 
         std::unique_ptr<SymbolLayer> layer = std::make_unique<SymbolLayer>(PointLayerID, SourceID);
 
         layer->setSourceLayer(PointLayerID);
-        layer->setIconImage({"{sprite}"});
+        layer->setIconImage({SourceID + ".{sprite}"});
         layer->setIconAllowOverlap(true);
         layer->setIconIgnorePlacement(true);
-
-        layer->impl->spriteAtlas = &spriteAtlas;
 
         style.addLayer(std::move(layer));
     }
@@ -196,13 +159,30 @@ void AnnotationManager::updateStyle(Style& style) {
         shape.second->updateStyle(style);
     }
 
+    for (const auto& image : images) {
+        // Call addImage even for images we may have previously added, because we must support
+        // addAnnotationImage being used to update an existing image. Creating a new image is
+        // relatively cheap, as it copies only the Immutable reference. (We can't keep track
+        // of which images need to be added because we don't know if the style is the same
+        // instance as in the last updateStyle call. If it's a new style, we need to add all
+        // images.)
+        style.addImage(std::make_unique<style::Image>(image.second));
+    }
+
     for (const auto& layer : obsoleteShapeAnnotationLayers) {
         if (style.getLayer(layer)) {
             style.removeLayer(layer);
         }
     }
 
+    for (const auto& image : obsoleteImages) {
+        if (style.getImage(image)) {
+            style.removeImage(image);
+        }
+    }
+
     obsoleteShapeAnnotationLayers.clear();
+    obsoleteImages.clear();
 }
 
 void AnnotationManager::updateData() {
@@ -220,19 +200,30 @@ void AnnotationManager::removeTile(AnnotationTile& tile) {
     tiles.erase(&tile);
 }
 
-void AnnotationManager::addIcon(const std::string& name, std::shared_ptr<const SpriteImage> sprite) {
-    spriteAtlas.setSprite(name, sprite);
-    spriteAtlas.updateDirty();
+// To ensure that annotation images do not collide with images from the style,
+// we prefix input image IDs with "com.mapbox.annotations".
+static std::string prefixedImageID(const std::string& id) {
+    return AnnotationManager::SourceID + "." + id;
 }
 
-void AnnotationManager::removeIcon(const std::string& name) {
-    spriteAtlas.removeSprite(name);
-    spriteAtlas.updateDirty();
+void AnnotationManager::addImage(std::unique_ptr<style::Image> image) {
+    const std::string id = prefixedImageID(image->getID());
+    images.erase(id);
+    images.emplace(id,
+        style::Image(id, image->getImage().clone(), image->getPixelRatio(), image->isSdf()));
+    obsoleteImages.erase(id);
 }
 
-double AnnotationManager::getTopOffsetPixelsForIcon(const std::string& name) {
-    auto sprite = spriteAtlas.getSprite(name);
-    return sprite ? -(sprite->image.size.height / sprite->pixelRatio) / 2 : 0;
+void AnnotationManager::removeImage(const std::string& id_) {
+    const std::string id = prefixedImageID(id_);
+    images.erase(id);
+    obsoleteImages.insert(id);
+}
+
+double AnnotationManager::getTopOffsetPixelsForImage(const std::string& id_) {
+    const std::string id = prefixedImageID(id_);
+    auto it = images.find(id);
+    return it != images.end() ? -(it->second.getImage().size.height / it->second.getPixelRatio()) / 2 : 0;
 }
 
 } // namespace mbgl

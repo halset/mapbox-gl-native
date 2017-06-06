@@ -14,12 +14,15 @@ import com.mapbox.mapboxsdk.maps.MapView;
 import com.mapbox.mapboxsdk.maps.MapboxMap;
 import com.mapbox.mapboxsdk.maps.OnMapReadyCallback;
 import com.mapbox.mapboxsdk.style.layers.CustomLayer;
-import com.mapbox.mapboxsdk.style.layers.NoSuchLayerException;
 import com.mapbox.mapboxsdk.testapp.R;
 import com.mapbox.mapboxsdk.testapp.model.customlayer.ExampleCustomLayer;
 
-import timber.log.Timber;
-
+/**
+ * Test activity showcasing the Custom Layer API
+ * <p>
+ * Note: experimental API, do not use.
+ * </p>
+ */
 public class CustomLayerActivity extends AppCompatActivity {
 
   private MapboxMap mapboxMap;
@@ -58,12 +61,8 @@ public class CustomLayerActivity extends AppCompatActivity {
 
   private void swapCustomLayer() {
     if (customLayer != null) {
-      try {
-        mapboxMap.removeLayer(customLayer.getId());
-        customLayer = null;
-      } catch (NoSuchLayerException noSuchLayerException) {
-        Timber.e("No custom layer to remove");
-      }
+      mapboxMap.removeLayer(customLayer);
+      customLayer = null;
       fab.setImageResource(R.drawable.ic_layers);
     } else {
       customLayer = new CustomLayer("custom",
@@ -71,7 +70,7 @@ public class CustomLayerActivity extends AppCompatActivity {
         ExampleCustomLayer.InitializeFunction,
         ExampleCustomLayer.RenderFunction,
         ExampleCustomLayer.DeinitializeFunction);
-      mapboxMap.addLayer(customLayer, "building");
+      mapboxMap.addLayerBelow(customLayer, "building");
       fab.setImageResource(R.drawable.ic_layers_clear);
     }
   }
