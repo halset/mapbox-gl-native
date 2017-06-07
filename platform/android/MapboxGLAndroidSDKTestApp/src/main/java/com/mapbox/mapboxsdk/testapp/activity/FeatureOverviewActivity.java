@@ -8,6 +8,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.StringRes;
@@ -32,6 +33,13 @@ import java.util.List;
 
 import timber.log.Timber;
 
+/**
+ * Activity shown when application is started
+ * <p>
+ * This activity  will generate data for RecyclerView based on the AndroidManifest entries.
+ * It uses tags as category and description to order the different entries.
+ * </p>
+ */
 public class FeatureOverviewActivity extends AppCompatActivity {
 
   private static final String KEY_STATE_FEATURES = "featureList";
@@ -125,7 +133,7 @@ public class FeatureOverviewActivity extends AppCompatActivity {
 
   @Override
   public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-    if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+    if (!isRuntimePermissionsRequired() || isPermissionAccepted(grantResults)) {
       startFeature(features.get(requestCode));
     } else {
       Snackbar.make(
@@ -133,6 +141,14 @@ public class FeatureOverviewActivity extends AppCompatActivity {
         "Can't open without accepting the location permission.",
         Snackbar.LENGTH_SHORT).show();
     }
+  }
+
+  private boolean isRuntimePermissionsRequired() {
+    return android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.M;
+  }
+
+  private boolean isPermissionAccepted(@NonNull int[] grantResults) {
+    return grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
   }
 
   @Override

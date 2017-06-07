@@ -14,6 +14,7 @@ import android.support.annotation.IntRange;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.res.ResourcesCompat;
 import android.util.AttributeSet;
 import android.view.Gravity;
 
@@ -34,10 +35,8 @@ import java.util.Arrays;
  */
 public class MapboxMapOptions implements Parcelable {
 
-  private static final float DIMENSION_SEVEN_DP = 7f;
-  private static final float DIMENSION_TEN_DP = 10f;
-  private static final float DIMENSION_SIXTEEN_DP = 16f;
-  private static final float DIMENSION_SEVENTY_SIX_DP = 76f;
+  private static final float FOUR_DP = 4f;
+  private static final float NINETY_TWO_DP = 92f;
 
   private CameraPosition cameraPosition;
 
@@ -47,6 +46,7 @@ public class MapboxMapOptions implements Parcelable {
   private boolean fadeCompassFacingNorth = true;
   private int compassGravity = Gravity.TOP | Gravity.END;
   private int[] compassMargins;
+  private Drawable compassImage;
 
   private boolean logoEnabled = true;
   private int logoGravity = Gravity.BOTTOM | Gravity.START;
@@ -100,6 +100,11 @@ public class MapboxMapOptions implements Parcelable {
     compassMargins = in.createIntArray();
     fadeCompassFacingNorth = in.readByte() != 0;
 
+    Bitmap compassBitmap = in.readParcelable(getClass().getClassLoader());
+    if (compassBitmap != null) {
+      compassImage = new BitmapDrawable(compassBitmap);
+    }
+
     logoEnabled = in.readByte() != 0;
     logoGravity = in.readInt();
     logoMargins = in.createIntArray();
@@ -147,7 +152,7 @@ public class MapboxMapOptions implements Parcelable {
     textureMode = in.readByte() != 0;
   }
 
-  public static Bitmap getBitmapFromDrawable(Drawable drawable) {
+  static Bitmap getBitmapFromDrawable(Drawable drawable) {
     if (drawable instanceof BitmapDrawable) {
       return ((BitmapDrawable) drawable).getBitmap();
     } else {
@@ -199,28 +204,34 @@ public class MapboxMapOptions implements Parcelable {
         Gravity.TOP | Gravity.END));
       mapboxMapOptions.compassMargins(new int[] {
         (int) (typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiCompassMarginLeft,
-          DIMENSION_TEN_DP * pxlRatio)),
+          FOUR_DP * pxlRatio)),
         ((int) typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiCompassMarginTop,
-          DIMENSION_TEN_DP * pxlRatio)),
+          FOUR_DP * pxlRatio)),
         ((int) typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiCompassMarginRight,
-          DIMENSION_TEN_DP * pxlRatio)),
+          FOUR_DP * pxlRatio)),
         ((int) typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiCompassMarginBottom,
-          DIMENSION_TEN_DP * pxlRatio))});
+          FOUR_DP * pxlRatio))});
       mapboxMapOptions.compassFadesWhenFacingNorth(typedArray.getBoolean(
         R.styleable.mapbox_MapView_mapbox_uiCompassFadeFacingNorth, true));
+      Drawable compassDrawable = typedArray.getDrawable(
+        R.styleable.mapbox_MapView_mapbox_uiCompassDrawable);
+      if (compassDrawable == null) {
+        compassDrawable = ResourcesCompat.getDrawable(context.getResources(), R.drawable.mapbox_compass_icon, null);
+      }
+      mapboxMapOptions.compassImage(compassDrawable);
 
       mapboxMapOptions.logoEnabled(typedArray.getBoolean(R.styleable.mapbox_MapView_mapbox_uiLogo, true));
       mapboxMapOptions.logoGravity(typedArray.getInt(R.styleable.mapbox_MapView_mapbox_uiLogoGravity,
         Gravity.BOTTOM | Gravity.START));
       mapboxMapOptions.logoMargins(new int[] {
         (int) (typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiLogoMarginLeft,
-          DIMENSION_SIXTEEN_DP * pxlRatio)),
+          FOUR_DP * pxlRatio)),
         (int) (typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiLogoMarginTop,
-          DIMENSION_SIXTEEN_DP * pxlRatio)),
+          FOUR_DP * pxlRatio)),
         (int) (typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiLogoMarginRight,
-          DIMENSION_SIXTEEN_DP * pxlRatio)),
+          FOUR_DP * pxlRatio)),
         (int) (typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiLogoMarginBottom,
-          DIMENSION_SIXTEEN_DP * pxlRatio))});
+          FOUR_DP * pxlRatio))});
 
       mapboxMapOptions.attributionTintColor(typedArray.getColor(
         R.styleable.mapbox_MapView_mapbox_uiAttributionTintColor, -1));
@@ -230,13 +241,13 @@ public class MapboxMapOptions implements Parcelable {
         R.styleable.mapbox_MapView_mapbox_uiAttributionGravity, Gravity.BOTTOM));
       mapboxMapOptions.attributionMargins(new int[] {
         (int) (typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiAttributionMarginLeft,
-          DIMENSION_SEVENTY_SIX_DP) * pxlRatio),
+          NINETY_TWO_DP * pxlRatio)),
         (int) (typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiAttributionMarginTop,
-          DIMENSION_SEVEN_DP * pxlRatio)),
+          FOUR_DP * pxlRatio)),
         (int) (typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiAttributionMarginRight,
-          DIMENSION_SEVEN_DP * pxlRatio)),
+          FOUR_DP * pxlRatio)),
         (int) (typedArray.getDimension(R.styleable.mapbox_MapView_mapbox_uiAttributionMarginBottom,
-          DIMENSION_SEVEN_DP * pxlRatio))});
+          FOUR_DP * pxlRatio))});
 
       mapboxMapOptions.locationEnabled(typedArray.getBoolean(R.styleable.mapbox_MapView_mapbox_myLocation, false));
       mapboxMapOptions.myLocationForegroundTintColor(
@@ -397,6 +408,20 @@ public class MapboxMapOptions implements Parcelable {
    */
   public MapboxMapOptions compassFadesWhenFacingNorth(boolean compassFadeWhenFacingNorth) {
     this.fadeCompassFacingNorth = compassFadeWhenFacingNorth;
+    return this;
+  }
+
+  /**
+   * Specifies the image of the CompassView.
+   * <p>
+   * By default this value is R.drawable.mapbox_compass_icon.
+   * </p>
+   *
+   * @param compass the drawable to show as image compass
+   * @return This
+   */
+  public MapboxMapOptions compassImage(Drawable compass) {
+    this.compassImage = compass;
     return this;
   }
 
@@ -743,6 +768,15 @@ public class MapboxMapOptions implements Parcelable {
   }
 
   /**
+   * Get the current configured CompassView image.
+   *
+   * @return the drawable used as compass image
+   */
+  public Drawable getCompassImage() {
+    return compassImage;
+  }
+
+  /**
    * Get the current configured visibility state for mapbox_compass_icon for a map view.
    *
    * @return Visibility state of the mapbox_compass_icon
@@ -993,6 +1027,8 @@ public class MapboxMapOptions implements Parcelable {
     dest.writeInt(compassGravity);
     dest.writeIntArray(compassMargins);
     dest.writeByte((byte) (fadeCompassFacingNorth ? 1 : 0));
+    dest.writeParcelable(compassImage != null
+      ? getBitmapFromDrawable(compassImage) : null, flags);
 
     dest.writeByte((byte) (logoEnabled ? 1 : 0));
     dest.writeInt(logoGravity);
@@ -1050,6 +1086,11 @@ public class MapboxMapOptions implements Parcelable {
       return false;
     }
     if (fadeCompassFacingNorth != options.fadeCompassFacingNorth) {
+      return false;
+    }
+    if (compassImage != null
+      ? !compassImage.equals(options.compassImage)
+      : options.compassImage != null) {
       return false;
     }
     if (compassGravity != options.compassGravity) {
@@ -1157,6 +1198,7 @@ public class MapboxMapOptions implements Parcelable {
     result = 31 * result + (compassEnabled ? 1 : 0);
     result = 31 * result + (fadeCompassFacingNorth ? 1 : 0);
     result = 31 * result + compassGravity;
+    result = 31 * result + (compassImage != null ? compassImage.hashCode() : 0);
     result = 31 * result + Arrays.hashCode(compassMargins);
     result = 31 * result + (logoEnabled ? 1 : 0);
     result = 31 * result + logoGravity;

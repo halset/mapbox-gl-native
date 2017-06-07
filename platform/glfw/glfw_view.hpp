@@ -7,11 +7,7 @@
 #include <mbgl/util/timer.hpp>
 #include <mbgl/util/geometry.hpp>
 
-#if MBGL_USE_GLES2
-#define GLFW_INCLUDE_ES2
-#endif
-#define GL_GLEXT_PROTOTYPES
-#include <GLFW/glfw3.h>
+struct GLFWwindow;
 
 class GLFWView : public mbgl::View, public mbgl::Backend {
 public:
@@ -26,6 +22,10 @@ public:
     // The expected action is to set a new style, different to the current one.
     void setChangeStyleCallback(std::function<void()> callback);
 
+    void setPauseResumeCallback(std::function<void()> callback) {
+        pauseResumeCallback = callback;
+    };
+
     void setShouldClose();
 
     void setWindowTitle(const std::string&);
@@ -33,15 +33,19 @@ public:
     void run();
 
     // mbgl::View implementation
-    void updateViewBinding();
     void bind() override;
     mbgl::Size getSize() const;
     mbgl::Size getFramebufferSize() const;
 
     // mbgl::Backend implementation
+    void invalidate() override;
+    void updateAssumedState() override;
+
+protected:
+    // mbgl::Backend implementation
+    mbgl::gl::ProcAddress initializeExtension(const char*) override;
     void activate() override;
     void deactivate() override;
-    void invalidate() override;
 
 private:
     // Window callbacks
@@ -55,13 +59,9 @@ private:
     // Internal
     void report(float duration);
 
-    void setMapChangeCallback(std::function<void(mbgl::MapChange)> callback);
-    void notifyMapChange(mbgl::MapChange change) override;
-
     mbgl::Color makeRandomColor() const;
     mbgl::Point<double> makeRandomPoint() const;
-    static std::shared_ptr<const mbgl::SpriteImage>
-    makeSpriteImage(int width, int height, float pixelRatio);
+    static std::unique_ptr<mbgl::style::Image> makeImage(const std::string& id, int width, int height, float pixelRatio);
 
     void nextOrientation();
 
@@ -75,8 +75,6 @@ private:
 
     mbgl::AnnotationIDs annotationIDs;
     std::vector<std::string> spriteIDs;
-
-    std::function<void(mbgl::MapChange)> mapChangeCallback;
 
 private:
     mbgl::Map* map = nullptr;
@@ -103,6 +101,7 @@ private:
     double lastClick = -1;
 
     std::function<void()> changeStyleCallback;
+    std::function<void()> pauseResumeCallback;
 
     mbgl::util::RunLoop runLoop;
     mbgl::util::Timer frameTick;

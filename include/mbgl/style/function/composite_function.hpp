@@ -56,9 +56,13 @@ public:
                 assert(!s.stops.empty());
                 auto minIt = s.stops.lower_bound(zoom);
                 auto maxIt = s.stops.upper_bound(zoom);
-                if (minIt != s.stops.begin()) {
+                
+                // lower_bound yields first element >= zoom, but we want the *last*
+                // element <= zoom, so if we found a stop > zoom, back up by one.
+                if (minIt != s.stops.begin() && minIt->first > zoom) {
                     minIt--;
                 }
+                
                 return std::make_tuple(
                     Range<float> {
                         minIt == s.stops.end() ? s.stops.rbegin()->first : minIt->first,
@@ -73,8 +77,9 @@ public:
         );
     }
 
+    template <class Feature>
     Range<T> evaluate(Range<InnerStops> coveringStops,
-                      const GeometryTileFeature& feature,
+                      const Feature& feature,
                       T finalDefaultValue) const {
         optional<Value> v = feature.getValue(property);
         if (!v) {

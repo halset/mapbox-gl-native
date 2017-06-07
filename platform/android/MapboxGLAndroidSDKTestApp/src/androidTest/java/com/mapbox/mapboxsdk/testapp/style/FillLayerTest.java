@@ -22,6 +22,7 @@ import com.mapbox.mapboxsdk.style.layers.FillLayer;
 import com.mapbox.mapboxsdk.testapp.R;
 import com.mapbox.mapboxsdk.testapp.activity.style.RuntimeStyleTestActivity;
 import com.mapbox.mapboxsdk.testapp.utils.OnMapReadyIdlingResource;
+import com.mapbox.mapboxsdk.testapp.activity.BaseActivityTest;
 
 import org.junit.After;
 import org.junit.Before;
@@ -36,27 +37,23 @@ import static org.junit.Assert.*;
 import static com.mapbox.mapboxsdk.style.layers.Property.*;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.*;
 
+import com.mapbox.mapboxsdk.style.layers.TransitionOptions;
+import com.mapbox.mapboxsdk.testapp.activity.espresso.EspressoTestActivity;
+
 /**
  * Basic smoke tests for FillLayer
  */
 @RunWith(AndroidJUnit4.class)
-public class FillLayerTest extends BaseStyleTest {
-
-  @Rule
-  public final ActivityTestRule<RuntimeStyleTestActivity> rule = new ActivityTestRule<>(RuntimeStyleTestActivity.class);
+public class FillLayerTest extends BaseActivityTest {
 
   private FillLayer layer;
 
-  private OnMapReadyIdlingResource idlingResource;
+  @Override
+  protected Class getActivityClass() {
+    return EspressoTestActivity.class;
+  }
 
-  private MapboxMap mapboxMap;
-
-  @Before
-  public void setup() {
-    idlingResource = new OnMapReadyIdlingResource(rule.getActivity());
-    Espresso.registerIdlingResources(idlingResource);
-    mapboxMap = rule.getActivity().getMapboxMap();
-
+  private void setupLayer(){
     if ((layer = mapboxMap.getLayerAs("my-layer")) == null) {
       Timber.i("Adding layer");
       layer = new FillLayer("my-layer", "composite");
@@ -69,7 +66,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testSetVisibility() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("Visibility");
     assertNotNull(layer);
 
@@ -82,8 +80,25 @@ public class FillLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testSourceLayer() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("SourceLayer");
+    assertNotNull(layer);
+
+    // Get initial
+    assertEquals(layer.getSourceLayer(), "composite");
+
+    // Set
+    final String sourceLayer = "test";
+    layer.setSourceLayer(sourceLayer);
+    assertEquals(layer.getSourceLayer(), sourceLayer);
+  }
+
+  @Test
   public void testFillAntialiasAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-antialias");
     assertNotNull(layer);
 
@@ -94,7 +109,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillAntialiasAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-antialias");
     assertNotNull(layer);
 
@@ -118,8 +134,22 @@ public class FillLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testFillOpacityTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("fill-opacityTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setFillOpacityTransition(options);
+    assertEquals(layer.getFillOpacityTransition(), options);
+  }
+
+  @Test
   public void testFillOpacityAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-opacity");
     assertNotNull(layer);
 
@@ -130,7 +160,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillOpacityAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-opacity");
     assertNotNull(layer);
 
@@ -156,7 +187,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillOpacityAsIdentitySourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-opacity");
     assertNotNull(layer);
 
@@ -175,7 +207,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillOpacityAsExponentialSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-opacity");
     assertNotNull(layer);
 
@@ -201,7 +234,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillOpacityAsCategoricalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-opacity");
     assertNotNull(layer);
 
@@ -213,7 +247,7 @@ public class FillLayerTest extends BaseStyleTest {
           categorical(
             stop(1.0f, fillOpacity(0.3f))
           )
-        ).withDefaultValue(0.3f)
+        ).withDefaultValue(fillOpacity(0.3f))
       )
     );
 
@@ -223,12 +257,15 @@ public class FillLayerTest extends BaseStyleTest {
     assertEquals(SourceFunction.class, layer.getFillOpacity().getFunction().getClass());
     assertEquals("FeaturePropertyA", ((SourceFunction) layer.getFillOpacity().getFunction()).getProperty());
     assertEquals(CategoricalStops.class, layer.getFillOpacity().getFunction().getStops().getClass());
-    assertEquals(0.3f, ((SourceFunction) layer.getFillOpacity().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getFillOpacity().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getFillOpacity().getFunction()).getDefaultValue().getValue());
+    assertEquals(0.3f, ((SourceFunction) layer.getFillOpacity().getFunction()).getDefaultValue().getValue());
   }
 
   @Test
   public void testFillOpacityAsCompositeFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-opacity");
     assertNotNull(layer);
 
@@ -240,7 +277,7 @@ public class FillLayerTest extends BaseStyleTest {
           exponential(
             stop(0, 0.3f, fillOpacity(0.9f))
           ).withBase(0.5f)
-        ).withDefaultValue(0.3f)
+        ).withDefaultValue(fillOpacity(0.3f))
       )
     );
 
@@ -261,8 +298,22 @@ public class FillLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testFillColorTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("fill-colorTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setFillColorTransition(options);
+    assertEquals(layer.getFillColorTransition(), options);
+  }
+
+  @Test
   public void testFillColorAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-color");
     assertNotNull(layer);
 
@@ -273,7 +324,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillColorAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-color");
     assertNotNull(layer);
 
@@ -299,7 +351,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillColorAsIdentitySourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-color");
     assertNotNull(layer);
 
@@ -318,7 +371,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillColorAsExponentialSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-color");
     assertNotNull(layer);
 
@@ -344,7 +398,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillColorAsCategoricalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-color");
     assertNotNull(layer);
 
@@ -356,7 +411,7 @@ public class FillLayerTest extends BaseStyleTest {
           categorical(
             stop("valueA", fillColor(Color.RED))
           )
-        )
+        ).withDefaultValue(fillColor(Color.GREEN))
       )
     );
 
@@ -366,11 +421,15 @@ public class FillLayerTest extends BaseStyleTest {
     assertEquals(SourceFunction.class, layer.getFillColor().getFunction().getClass());
     assertEquals("FeaturePropertyA", ((SourceFunction) layer.getFillColor().getFunction()).getProperty());
     assertEquals(CategoricalStops.class, layer.getFillColor().getFunction().getStops().getClass());
+    assertNotNull(((SourceFunction) layer.getFillColor().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getFillColor().getFunction()).getDefaultValue().getValue());
+    assertEquals(Color.GREEN, (int) ((SourceFunction) layer.getFillColor().getFunction()).getDefaultValue().getColorInt());
   }
 
   @Test
   public void testFillColorAsIntConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-color");
     assertNotNull(layer);
 
@@ -380,8 +439,22 @@ public class FillLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testFillOutlineColorTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("fill-outline-colorTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setFillOutlineColorTransition(options);
+    assertEquals(layer.getFillOutlineColorTransition(), options);
+  }
+
+  @Test
   public void testFillOutlineColorAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-outline-color");
     assertNotNull(layer);
 
@@ -392,7 +465,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillOutlineColorAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-outline-color");
     assertNotNull(layer);
 
@@ -418,7 +492,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillOutlineColorAsIdentitySourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-outline-color");
     assertNotNull(layer);
 
@@ -437,7 +512,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillOutlineColorAsExponentialSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-outline-color");
     assertNotNull(layer);
 
@@ -463,7 +539,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillOutlineColorAsCategoricalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-outline-color");
     assertNotNull(layer);
 
@@ -475,7 +552,7 @@ public class FillLayerTest extends BaseStyleTest {
           categorical(
             stop("valueA", fillOutlineColor(Color.RED))
           )
-        )
+        ).withDefaultValue(fillOutlineColor(Color.GREEN))
       )
     );
 
@@ -485,11 +562,15 @@ public class FillLayerTest extends BaseStyleTest {
     assertEquals(SourceFunction.class, layer.getFillOutlineColor().getFunction().getClass());
     assertEquals("FeaturePropertyA", ((SourceFunction) layer.getFillOutlineColor().getFunction()).getProperty());
     assertEquals(CategoricalStops.class, layer.getFillOutlineColor().getFunction().getStops().getClass());
+    assertNotNull(((SourceFunction) layer.getFillOutlineColor().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getFillOutlineColor().getFunction()).getDefaultValue().getValue());
+    assertEquals(Color.GREEN, (int) ((SourceFunction) layer.getFillOutlineColor().getFunction()).getDefaultValue().getColorInt());
   }
 
   @Test
   public void testFillOutlineColorAsIntConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-outline-color");
     assertNotNull(layer);
 
@@ -499,8 +580,22 @@ public class FillLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testFillTranslateTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("fill-translateTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setFillTranslateTransition(options);
+    assertEquals(layer.getFillTranslateTransition(), options);
+  }
+
+  @Test
   public void testFillTranslateAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-translate");
     assertNotNull(layer);
 
@@ -511,7 +606,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillTranslateAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-translate");
     assertNotNull(layer);
 
@@ -537,7 +633,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillTranslateAnchorAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-translate-anchor");
     assertNotNull(layer);
 
@@ -548,7 +645,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillTranslateAnchorAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-translate-anchor");
     assertNotNull(layer);
 
@@ -572,8 +670,22 @@ public class FillLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testFillPatternTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("fill-patternTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setFillPatternTransition(options);
+    assertEquals(layer.getFillPatternTransition(), options);
+  }
+
+  @Test
   public void testFillPatternAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-pattern");
     assertNotNull(layer);
 
@@ -584,7 +696,8 @@ public class FillLayerTest extends BaseStyleTest {
 
   @Test
   public void testFillPatternAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("fill-pattern");
     assertNotNull(layer);
 
@@ -607,9 +720,4 @@ public class FillLayerTest extends BaseStyleTest {
     assertEquals(1, ((IntervalStops) layer.getFillPattern().getFunction().getStops()).size());
   }
 
-
-  @After
-  public void unregisterIntentServiceIdlingResource() {
-    Espresso.unregisterIdlingResources(idlingResource);
-  }
 }

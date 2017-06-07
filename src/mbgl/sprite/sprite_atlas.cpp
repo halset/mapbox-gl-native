@@ -1,6 +1,5 @@
 #include <mbgl/sprite/sprite_atlas.hpp>
-#include <mbgl/sprite/sprite_atlas_observer.hpp>
-#include <mbgl/sprite/sprite_parser.hpp>
+#include <mbgl/style/image_impl.hpp>
 #include <mbgl/gl/context.hpp>
 #include <mbgl/util/logging.hpp>
 #include <mbgl/util/platform.hpp>
@@ -8,9 +7,6 @@
 #include <mbgl/util/std.hpp>
 #include <mbgl/util/constants.hpp>
 #include <mbgl/util/exception.hpp>
-#include <mbgl/storage/file_source.hpp>
-#include <mbgl/storage/resource.hpp>
-#include <mbgl/storage/response.hpp>
 
 #include <cassert>
 #include <cmath>
@@ -18,295 +14,215 @@
 
 namespace mbgl {
 
-static SpriteAtlasObserver nullObserver;
+// When copied into the atlas texture, image data is padded by one pixel on each side. Icon
+// images are padded with fully transparent pixels, while pattern images are padded with a
+// copy of the image data wrapped from the opposite side. In both cases, this ensures the
+// correct behavior of GL_LINEAR texture sampling mode.
+static constexpr uint16_t padding = 1;
 
-struct SpriteAtlas::Loader {
-    std::shared_ptr<const std::string> image;
-    std::shared_ptr<const std::string> json;
-    std::unique_ptr<AsyncRequest> jsonRequest;
-    std::unique_ptr<AsyncRequest> spriteRequest;
-};
+SpriteAtlasElement::SpriteAtlasElement(const mapbox::Bin& bin, const style::Image::Impl& image)
+    : sdf(image.sdf),
+      pixelRatio(image.pixelRatio),
+      textureRect(
+        bin.x + padding,
+        bin.y + padding,
+        bin.w - padding * 2,
+        bin.h - padding * 2
+      ) {
+}
 
-SpriteAtlas::SpriteAtlas(Size size_, float pixelRatio_)
-    : size(std::move(size_)),
-      pixelRatio(pixelRatio_),
-      observer(&nullObserver),
-      bin(size.width, size.height),
-      dirty(true) {
+static mapbox::ShelfPack::ShelfPackOptions shelfPackOptions() {
+    mapbox::ShelfPack::ShelfPackOptions options;
+    options.autoResize = true;
+    return options;
+}
+
+SpriteAtlas::SpriteAtlas()
+    : shelfPack(64, 64, shelfPackOptions()) {
 }
 
 SpriteAtlas::~SpriteAtlas() = default;
 
-void SpriteAtlas::load(const std::string& url, FileSource& fileSource) {
-    if (url.empty()) {
-        // Treat a non-existent sprite as a successfully loaded empty sprite.
-        loaded = true;
-        return;
+void SpriteAtlas::onSpriteLoaded() {
+    loaded = true;
+    for (auto requestor : requestors) {
+        requestor->onIconsAvailable(buildIconMap());
+    }
+    requestors.clear();
+}
+
+void SpriteAtlas::addImage(Immutable<style::Image::Impl> image_) {
+    assert(entries.find(image_->id) == entries.end());
+    entries.emplace(image_->id, Entry { image_ });
+    icons.clear();
+}
+
+void SpriteAtlas::updateImage(Immutable<style::Image::Impl> image_) {
+    assert(entries.find(image_->id) != entries.end());
+    Entry& entry = entries.at(image_->id);
+
+    // Style::addImage should prevent changing size.
+    assert(entry.image->image.size == image_->image.size);
+
+    entry.image = std::move(image_);
+
+    if (entry.iconBin) {
+        copy(entry, &Entry::iconBin);
     }
 
-    loader = std::make_unique<Loader>();
-
-    loader->jsonRequest = fileSource.request(Resource::spriteJSON(url, pixelRatio), [this](Response res) {
-        if (res.error) {
-            observer->onSpriteError(std::make_exception_ptr(std::runtime_error(res.error->message)));
-        } else if (res.notModified) {
-            return;
-        } else if (res.noContent) {
-            loader->json = std::make_shared<const std::string>();
-            emitSpriteLoadedIfComplete();
-        } else {
-            // Only trigger a sprite loaded event we got new data.
-            loader->json = res.data;
-            emitSpriteLoadedIfComplete();
-        }
-    });
-
-    loader->spriteRequest = fileSource.request(Resource::spriteImage(url, pixelRatio), [this](Response res) {
-        if (res.error) {
-            observer->onSpriteError(std::make_exception_ptr(std::runtime_error(res.error->message)));
-        } else if (res.notModified) {
-            return;
-        } else if (res.noContent) {
-            loader->image = std::make_shared<const std::string>();
-            emitSpriteLoadedIfComplete();
-        } else {
-            loader->image = res.data;
-            emitSpriteLoadedIfComplete();
-        }
-    });
-}
-
-void SpriteAtlas::emitSpriteLoadedIfComplete() {
-    assert(loader);
-
-    if (!loader->image || !loader->json) {
-        return;
+    if (entry.patternBin) {
+        copy(entry, &Entry::patternBin);
     }
 
-    auto result = parseSprite(*loader->image, *loader->json);
-    if (result.is<Sprites>()) {
-        loaded = true;
-        setSprites(result.get<Sprites>());
-        observer->onSpriteLoaded();
-    } else {
-        observer->onSpriteError(result.get<std::exception_ptr>());
+    icons.clear();
+}
+
+void SpriteAtlas::removeImage(const std::string& id) {
+    assert(entries.find(id) != entries.end());
+    Entry& entry = entries.at(id);
+
+    if (entry.iconBin) {
+        shelfPack.unref(*entry.iconBin);
     }
-}
 
-void SpriteAtlas::setObserver(SpriteAtlasObserver* observer_) {
-    observer = observer_;
-}
-
-void SpriteAtlas::dumpDebugLogs() const {
-    Log::Info(Event::General, "SpriteAtlas::loaded: %d", loaded);
-}
-
-void SpriteAtlas::setSprites(const Sprites& newSprites) {
-    std::lock_guard<std::mutex> lock(mutex);
-    for (const auto& pair : newSprites) {
-        _setSprite(pair.first, pair.second);
+    if (entry.patternBin) {
+        shelfPack.unref(*entry.patternBin);
     }
+
+    entries.erase(id);
+    icons.clear();
 }
 
-void SpriteAtlas::setSprite(const std::string& name, std::shared_ptr<const SpriteImage> sprite) {
-    std::lock_guard<std::mutex> lock(mutex);
-    _setSprite(name, sprite);
+const style::Image::Impl* SpriteAtlas::getImage(const std::string& id) const {
+    const auto it = entries.find(id);
+    if (it != entries.end()) {
+        return it->second.image.get();
+    }
+    if (!entries.empty()) {
+        Log::Info(Event::Sprite, "Can't find sprite named '%s'", id.c_str());
+    }
+    return nullptr;
 }
 
-void SpriteAtlas::removeSprite(const std::string& name) {
-    std::lock_guard<std::mutex> lock(mutex);
-    _setSprite(name);
-}
-
-void SpriteAtlas::_setSprite(const std::string& name,
-                             const std::shared_ptr<const SpriteImage>& sprite) {
-    if (sprite) {
-        auto it = sprites.find(name);
-        if (it != sprites.end()) {
-            // There is already a sprite with that name in our store.
-            if (it->second->image.size != sprite->image.size) {
-                Log::Warning(Event::Sprite, "Can't change sprite dimensions for '%s'", name.c_str());
-                return;
+void SpriteAtlas::getIcons(IconRequestor& requestor, IconDependencies dependencies) {
+    // If the sprite has been loaded, or if all the icon dependencies are already present
+    // (i.e. if they've been addeded via runtime styling), then notify the requestor immediately.
+    // Otherwise, delay notification until the sprite is loaded. At that point, if any of the
+    // dependencies are still unavailable, we'll just assume they are permanently missing.
+    bool hasAllDependencies = true;
+    if (!isLoaded()) {
+        for (const auto& dependency : dependencies) {
+            if (entries.find(dependency) == entries.end()) {
+                hasAllDependencies = false;
             }
-            it->second = sprite;
-        } else {
-            sprites.emplace(name, sprite);
         }
-
-        // Always add/replace the value in the dirty list.
-        auto dirty_it = dirtySprites.find(name);
-        if (dirty_it != dirtySprites.end()) {
-            dirty_it->second = sprite;
-        } else {
-            dirtySprites.emplace(name, sprite);
-        }
-    } else if (sprites.erase(name) > 0) {
-        dirtySprites.emplace(name, nullptr);
     }
-}
-
-std::shared_ptr<const SpriteImage> SpriteAtlas::getSprite(const std::string& name) {
-    std::lock_guard<std::mutex> lock(mutex);
-    const auto it = sprites.find(name);
-    if (it != sprites.end()) {
-        return it->second;
+    if (isLoaded() || hasAllDependencies) {
+        requestor.onIconsAvailable(buildIconMap());
     } else {
-        if (!sprites.empty()) {
-            Log::Info(Event::Sprite, "Can't find sprite named '%s'", name.c_str());
+        requestors.insert(&requestor);
+    }
+}
+
+void SpriteAtlas::removeRequestor(IconRequestor& requestor) {
+    requestors.erase(&requestor);
+}
+
+optional<SpriteAtlasElement> SpriteAtlas::getIcon(const std::string& id) {
+    return getImage(id, &Entry::iconBin);
+}
+
+optional<SpriteAtlasElement> SpriteAtlas::getPattern(const std::string& id) {
+    return getImage(id, &Entry::patternBin);
+}
+
+optional<SpriteAtlasElement> SpriteAtlas::getImage(const std::string& id, mapbox::Bin* Entry::*entryBin) {
+    auto it = entries.find(id);
+    if (it == entries.end()) {
+        if (!entries.empty()) {
+            Log::Info(Event::Sprite, "Can't find sprite named '%s'", id.c_str());
         }
-        return nullptr;
-    }
-}
-
-Rect<uint16_t> SpriteAtlas::allocateImage(const SpriteImage& spriteImage) {
-
-    const uint16_t pixel_width = std::ceil(spriteImage.image.size.width / pixelRatio);
-    const uint16_t pixel_height = std::ceil(spriteImage.image.size.height / pixelRatio);
-
-    // Increase to next number divisible by 4, but at least 1.
-    // This is so we can scale down the texture coordinates and pack them
-    // into 2 bytes rather than 4 bytes.
-    const uint16_t pack_width = (pixel_width + 1) + (4 - (pixel_width + 1) % 4);
-    const uint16_t pack_height = (pixel_height + 1) + (4 - (pixel_height + 1) % 4);
-
-    // We have to allocate a new area in the bin, and store an empty image in it.
-    // Add a 1px border around every image.
-    Rect<uint16_t> rect = bin.allocate(pack_width, pack_height);
-    if (rect.w == 0) {
-        return rect;
-    }
-
-    return rect;
-}
-
-optional<SpriteAtlasElement> SpriteAtlas::getImage(const std::string& name,
-                                                   const SpritePatternMode mode) {
-    std::lock_guard<std::recursive_mutex> lock(mtx);
-
-    auto rect_it = images.find({ name, mode });
-    if (rect_it != images.end()) {
-        return SpriteAtlasElement { rect_it->second.pos, rect_it->second.spriteImage, rect_it->second.spriteImage->pixelRatio / pixelRatio };
-    }
-
-    auto sprite = getSprite(name);
-    if (!sprite) {
         return {};
     }
 
-    Rect<uint16_t> rect = allocateImage(*sprite);
-    if (rect.w == 0) {
+    Entry& entry = it->second;
+
+    if (entry.*entryBin) {
+        assert(entry.image.get());
+        return SpriteAtlasElement {
+            *(entry.*entryBin),
+            *entry.image
+        };
+    }
+
+    const uint16_t width = entry.image->image.size.width + padding * 2;
+    const uint16_t height = entry.image->image.size.height + padding * 2;
+
+    mapbox::Bin* bin = shelfPack.packOne(-1, width, height);
+    if (!bin) {
         if (debug::spriteWarnings) {
             Log::Warning(Event::Sprite, "sprite atlas bitmap overflow");
         }
         return {};
     }
 
-    const Holder& holder = images.emplace(Key{ name, mode }, Holder{ sprite, rect }).first->second;
-    copy(holder, mode);
+    entry.*entryBin = bin;
+    copy(entry, entryBin);
 
-    return SpriteAtlasElement { rect, sprite, sprite->pixelRatio / pixelRatio };
-}
-
-optional<SpriteAtlasPosition> SpriteAtlas::getPosition(const std::string& name,
-                                                       const SpritePatternMode mode) {
-    std::lock_guard<std::recursive_mutex> lock(mtx);
-
-    auto img = getImage(name, mode);
-    if (!img) {
-        return {};
-    }
-
-    auto rect = (*img).pos;
-
-    const float padding = 1;
-    auto spriteImage = (*img).spriteImage;
-
-    const float w = spriteImage->getWidth() * (*img).relativePixelRatio;
-    const float h = spriteImage->getHeight() * (*img).relativePixelRatio;
-
-    return SpriteAtlasPosition {
-        {{ float(spriteImage->getWidth()), spriteImage->getHeight() }},
-        {{ float(rect.x + padding)     / size.width, float(rect.y + padding)     / size.height }},
-        {{ float(rect.x + padding + w) / size.width, float(rect.y + padding + h) / size.height }}
+    return SpriteAtlasElement {
+        *bin,
+        *entry.image
     };
 }
 
-void copyBitmap(const uint32_t *src, const uint32_t srcStride, const uint32_t srcX, const uint32_t srcY,
-        uint32_t *const dst, const uint32_t dstStride, const uint32_t dstX, const uint32_t dstY, int dstSize,
-        const int width, const int height, const SpritePatternMode mode) {
-
-    int srcI = srcY * srcStride + srcX;
-    int dstI = dstY * dstStride + dstX;
-    int x, y;
-
-    if (mode == SpritePatternMode::Repeating) {
-        // add 1 pixel wrapped padding on each side of the image
-        dstI -= dstStride;
-        for (y = -1; y <= height; y++, srcI = ((y + height) % height + srcY) * srcStride + srcX, dstI += dstStride) {
-            for (x = -1; x <= width; x++) {
-                const int dstIndex = (dstI + x + dstSize) % dstSize;
-                dst[dstIndex] = src[srcI + ((x + width) % width)];
-            }
-        }
-
-    } else {
-        for (y = 0; y < height; y++, srcI += srcStride, dstI += dstStride) {
-            for (x = 0; x < width; x++) {
-                const int dstIndex = (dstI + x + dstSize) % dstSize;
-                dst[dstIndex] = src[srcI + x];
-            }
-        }
-    }
+Size SpriteAtlas::getPixelSize() const {
+    return Size {
+        static_cast<uint32_t>(shelfPack.width()),
+        static_cast<uint32_t>(shelfPack.height())
+    };
 }
 
-void SpriteAtlas::copy(const Holder& holder, const SpritePatternMode mode) {
+void SpriteAtlas::copy(const Entry& entry, mapbox::Bin* Entry::*entryBin) {
     if (!image.valid()) {
-        image = PremultipliedImage({ static_cast<uint32_t>(std::ceil(size.width * pixelRatio)),
-                                     static_cast<uint32_t>(std::ceil(size.height * pixelRatio)) });
-        std::fill(image.data.get(), image.data.get() + image.bytes(), 0);
+        image = PremultipliedImage(getPixelSize());
+        image.fill(0);
+    } else if (image.size != getPixelSize()) {
+        PremultipliedImage newImage(getPixelSize());
+        PremultipliedImage::copy(image, newImage, { 0, 0 }, { 0, 0 }, image.size);
+        image = std::move(newImage);
     }
 
-    const uint32_t* srcData =
-        reinterpret_cast<const uint32_t*>(holder.spriteImage->image.data.get());
-    if (!srcData) return;
-    uint32_t* const dstData = reinterpret_cast<uint32_t*>(image.data.get());
+    const PremultipliedImage& src = entry.image->image;
+    const mapbox::Bin& bin = *(entry.*entryBin);
 
-    const int padding = 1;
+    const uint32_t x = bin.x + padding;
+    const uint32_t y = bin.y + padding;
+    const uint32_t w = src.size.width;
+    const uint32_t h = src.size.height;
 
-    copyBitmap(srcData, holder.spriteImage->image.size.width, 0, 0, dstData, image.size.width,
-               (holder.pos.x + padding) * pixelRatio, (holder.pos.y + padding) * pixelRatio,
-               image.size.width * image.size.height, holder.spriteImage->image.size.width,
-               holder.spriteImage->image.size.height, mode);
+    PremultipliedImage::copy(src, image, { 0, 0 }, { x, y }, { w, h });
+
+    if (entryBin == &Entry::patternBin) {
+        // Add 1 pixel wrapped padding on each side of the image.
+        PremultipliedImage::copy(src, image, { 0, h - 1 }, { x, y - 1 }, { w, 1 }); // T
+        PremultipliedImage::copy(src, image, { 0,     0 }, { x, y + h }, { w, 1 }); // B
+        PremultipliedImage::copy(src, image, { w - 1, 0 }, { x - 1, y }, { 1, h }); // L
+        PremultipliedImage::copy(src, image, { 0,     0 }, { x + w, y }, { 1, h }); // R
+    }
 
     dirty = true;
 }
 
-void SpriteAtlas::updateDirty() {
-    std::lock_guard<std::recursive_mutex> lock(mtx);
+IconMap SpriteAtlas::buildIconMap() {
+    if (icons.empty()) {
+        for (const auto& entry : entries) {
+            icons.emplace(std::piecewise_construct,
+                          std::forward_as_tuple(entry.first),
+                          std::forward_as_tuple(*getIcon(entry.first)));
 
-    auto imageIterator = images.begin();
-    auto spriteIterator = dirtySprites.begin();
-    while (imageIterator != images.end() && spriteIterator != dirtySprites.end()) {
-        if (imageIterator->first.first < spriteIterator->first) {
-            ++imageIterator;
-        } else if (spriteIterator->first < imageIterator->first.first) {
-            ++spriteIterator;
-        } else {
-            // The two names match;
-            Holder& holder = imageIterator->second;
-            holder.spriteImage = spriteIterator->second;
-            if (holder.spriteImage != nullptr) {
-                copy(holder, imageIterator->first.second);
-                ++imageIterator;
-            } else {
-                images.erase(imageIterator++);
-            }
-            // Don't advance the spriteIterator because there might be another sprite with the same
-            // name, but a different wrap value.
         }
     }
-
-    dirtySprites.clear();
+    return icons;
 }
 
 void SpriteAtlas::upload(gl::Context& context, gl::TextureUnit unit) {
@@ -333,11 +249,8 @@ void SpriteAtlas::bind(bool linear, gl::Context& context, gl::TextureUnit unit) 
                         linear ? gl::TextureFilter::Linear : gl::TextureFilter::Nearest);
 }
 
-SpriteAtlas::Holder::Holder(std::shared_ptr<const SpriteImage> spriteImage_, Rect<uint16_t> pos_)
-    : spriteImage(std::move(spriteImage_)), pos(std::move(pos_)) {
-}
-
-SpriteAtlas::Holder::Holder(Holder&& h) : spriteImage(std::move(h.spriteImage)), pos(h.pos) {
+void SpriteAtlas::dumpDebugLogs() const {
+    Log::Info(Event::General, "SpriteAtlas::loaded: %d", loaded);
 }
 
 } // namespace mbgl

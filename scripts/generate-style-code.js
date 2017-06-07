@@ -18,12 +18,19 @@ global.isDataDriven = function (property) {
   return property['property-function'] === true;
 };
 
+global.isLightProperty = function (property) {
+  return property['light-property'] === true;
+};
+
 global.evaluatedType = function (property) {
   if (/-translate-anchor$/.test(property.name)) {
     return 'TranslateAnchorType';
   }
   if (/-(rotation|pitch|illumination)-alignment$/.test(property.name)) {
     return 'AlignmentType';
+  }
+  if (/position/.test(property.name)) {
+    return 'Position';
   }
   switch (property.type) {
   case 'boolean':
@@ -33,7 +40,7 @@ global.evaluatedType = function (property) {
   case 'string':
     return 'std::string';
   case 'enum':
-    return `${camelize(property.name)}Type`;
+    return (isLightProperty(property) ? 'Light' : '') + `${camelize(property.name)}Type`;
   case 'color':
     return `Color`;
   case 'array':
@@ -47,7 +54,20 @@ global.evaluatedType = function (property) {
 };
 
 function attributeType(property, type) {
-    const name = property.name.replace(type + '-', '').replace('-', '_');
+    const attributeNameExceptions = {
+      'text-opacity': 'opacity',
+      'icon-opacity': 'opacity',
+      'text-color': 'fill_color',
+      'icon-color': 'fill_color',
+      'text-halo-color': 'halo_color',
+      'icon-halo-color': 'halo_color',
+      'text-halo-blur': 'halo_blur',
+      'icon-halo-blur': 'halo_blur',
+      'text-halo-width': 'halo_width',
+      'icon-halo-width': 'halo_width'
+    }
+    const name = attributeNameExceptions[property.name] ||
+        property.name.replace(type + '-', '').replace(/-/g, '_');
     return `attributes::a_${name}${name === 'offset' ? '<1>' : ''}`;
 }
 
@@ -164,3 +184,17 @@ for (const layer of layers) {
 
 const propertySettersHpp = ejs.compile(fs.readFileSync('include/mbgl/style/conversion/make_property_setters.hpp.ejs', 'utf8'), {strict: true});
 writeIfModified('include/mbgl/style/conversion/make_property_setters.hpp', propertySettersHpp({layers: layers}));
+
+// Light
+const lightProperties = Object.keys(spec[`light`]).reduce((memo, name) => {
+  var property = spec[`light`][name];
+  property.name = name;
+  property['light-property'] = true;
+  memo.push(property);
+  return memo;
+}, []);
+
+const lightHpp = ejs.compile(fs.readFileSync('include/mbgl/style/light.hpp.ejs', 'utf8'), {strict: true});
+const lightCpp = ejs.compile(fs.readFileSync('src/mbgl/style/light.cpp.ejs', 'utf8'), {strict: true});
+writeIfModified(`include/mbgl/style/light.hpp`, lightHpp({properties: lightProperties}));
+writeIfModified(`src/mbgl/style/light.cpp`, lightCpp({properties: lightProperties}));

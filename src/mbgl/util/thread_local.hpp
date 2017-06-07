@@ -1,7 +1,9 @@
 #pragma once
 
+#include <mbgl/util/logging.hpp>
 #include <mbgl/util/noncopyable.hpp>
 
+#include <cassert>
 #include <stdexcept>
 
 #include <pthread.h>
@@ -12,11 +14,6 @@ namespace util {
 template <class T>
 class ThreadLocal : public noncopyable {
 public:
-    ThreadLocal(T* val) {
-        ThreadLocal();
-        set(val);
-    }
-
     ThreadLocal() {
         int ret = pthread_key_create(&key, [](void *ptr) {
             delete reinterpret_cast<T *>(ptr);
@@ -29,12 +26,13 @@ public:
 
     ~ThreadLocal() {
         if (pthread_key_delete(key)) {
-            throw std::runtime_error("Failed to delete local storage key.");
+            Log::Error(Event::General, "Failed to delete local storage key.");
+            assert(false);
         }
     }
 
     T* get() {
-        T* ret = reinterpret_cast<T*>(pthread_getspecific(key));
+        auto* ret = reinterpret_cast<T*>(pthread_getspecific(key));
         if (!ret) {
             return nullptr;
         }
