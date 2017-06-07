@@ -5,6 +5,7 @@
 #import "MBXOfflinePacksTableViewController.h"
 #import "MBXAnnotationView.h"
 #import "MBXUserLocationAnnotationView.h"
+#import "MBXEmbeddedMapViewController.h"
 
 #import <Mapbox/Mapbox.h>
 
@@ -33,6 +34,7 @@ typedef NS_ENUM(NSInteger, MBXSettingsCoreRenderingRows) {
     MBXSettingsCoreRenderingTimestamps,
     MBXSettingsCoreRenderingCollisionBoxes,
     MBXSettingsCoreRenderingOverdrawVisualization,
+    MBXSettingsCoreRenderingToggleTwoMaps,
 };
 
 typedef NS_ENUM(NSInteger, MBXSettingsAnnotationsRows) {
@@ -42,6 +44,7 @@ typedef NS_ENUM(NSInteger, MBXSettingsAnnotationsRows) {
     MBXSettingsAnnotations100Sprites,
     MBXSettingsAnnotations1000Sprites,
     MBXSettingsAnnotations10000Sprites,
+    MBXSettingsAnnotationAnimation,
     MBXSettingsAnnotationsTestShapes,
     MBXSettingsAnnotationsCustomCallout,
     MBXSettingsAnnotationsQueryAnnotations,
@@ -77,6 +80,8 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
     MBXSettingsMiscellaneousShowReuseQueueStats = 0,
     MBXSettingsMiscellaneousWorldTour,
     MBXSettingsMiscellaneousCustomUserDot,
+    MBXSettingsMiscellaneousShowZoomLevel,
+    MBXSettingsMiscellaneousScrollView,
     MBXSettingsMiscellaneousPrintLogFile,
     MBXSettingsMiscellaneousDeleteLogFile,
 };
@@ -113,6 +118,7 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
 @property (nonatomic) BOOL customUserLocationAnnnotationEnabled;
 @property (nonatomic) BOOL usingLocaleBasedCountryLabels;
 @property (nonatomic) BOOL reuseQueueStatsEnabled;
+@property (nonatomic) BOOL showZoomLevelEnabled;
 
 @end
 
@@ -153,6 +159,7 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
     [self restoreState:nil];
 
     self.debugLoggingEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"MGLMapboxMetricsDebugLoggingEnabled"];
+    self.mapView.scaleBar.hidden = NO;
     self.hudLabel.hidden = YES;
 
     if ([MGLAccountManager accessToken].length)
@@ -296,6 +303,8 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
                     (debugMask & MGLMapDebugCollisionBoxesMask ? @"Hide" :@"Show")],
                 [NSString stringWithFormat:@"%@ Overdraw Visualization",
                     (debugMask & MGLMapDebugOverdrawVisualizationMask ? @"Hide" :@"Show")],
+                [NSString stringWithFormat:@"%@ Second Map",
+                    ([self.view viewWithTag:2] == nil ? @"Show" : @"Hide")],
             ]];
             break;
         case MBXSettingsAnnotations:
@@ -306,6 +315,7 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
                 @"Add 100 Sprites",
                 @"Add 1,000 Sprites",
                 @"Add 10,000 Sprites",
+                @"Animate an Annotation View",
                 @"Add Test Shapes",
                 @"Add Point With Custom Callout",
                 @"Query Annotations",
@@ -339,11 +349,12 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
             ]];
             break;
         case MBXSettingsMiscellaneous:
-            [settingsTitles addObject:@"Show Reuse Queue Stats"];
-
             [settingsTitles addObjectsFromArray:@[
+                [NSString stringWithFormat:@"%@ Reuse Queue Stats", (_reuseQueueStatsEnabled ? @"Hide" :@"Show")],
                 @"Start World Tour",
                 [NSString stringWithFormat:@"%@ Custom User Dot", (_customUserLocationAnnnotationEnabled ? @"Disable" : @"Enable")],
+                [NSString stringWithFormat:@"%@ Zoom Level", (_showZoomLevelEnabled ? @"Hide" :@"Show")],
+                @"Embedded Map View",
             ]];
 
             if (self.debugLoggingEnabled)
@@ -388,6 +399,81 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
                 case MBXSettingsCoreRenderingOverdrawVisualization:
                     self.mapView.debugMask ^= MGLMapDebugOverdrawVisualizationMask;
                     break;
+                case MBXSettingsCoreRenderingToggleTwoMaps:
+                    if ([self.view viewWithTag:2] == nil) {
+                        MGLMapView *secondMapView = [[MGLMapView alloc] initWithFrame:
+                                                        CGRectMake(0, self.view.bounds.size.height / 2,
+                                                                   self.view.bounds.size.width, self.view.bounds.size.height / 2)];
+                        secondMapView.translatesAutoresizingMaskIntoConstraints = false;
+                        secondMapView.tag = 2;
+                        for (NSLayoutConstraint *constraint in self.view.constraints)
+                        {
+                            if ((constraint.firstItem  == self.mapView && constraint.firstAttribute  == NSLayoutAttributeBottom) ||
+                                (constraint.secondItem == self.mapView && constraint.secondAttribute == NSLayoutAttributeBottom))
+                            {
+                                [self.view removeConstraint:constraint];
+                                break;
+                            }
+                        }
+                        [self.view addSubview:secondMapView];
+                        [self.view addConstraints:@[
+                            [NSLayoutConstraint constraintWithItem:self.mapView
+                                                         attribute:NSLayoutAttributeBottom
+                                                         relatedBy:NSLayoutRelationEqual
+                                                            toItem:self.view
+                                                         attribute:NSLayoutAttributeCenterY
+                                                        multiplier:1
+                                                          constant:0],
+                            [NSLayoutConstraint constraintWithItem:secondMapView
+                                                         attribute:NSLayoutAttributeCenterX
+                                                         relatedBy:NSLayoutRelationEqual
+                                                            toItem:self.view
+                                                         attribute:NSLayoutAttributeCenterX
+                                                        multiplier:1
+                                                          constant:0],
+                            [NSLayoutConstraint constraintWithItem:secondMapView
+                                                         attribute:NSLayoutAttributeWidth
+                                                         relatedBy:NSLayoutRelationEqual
+                                                            toItem:self.view
+                                                         attribute:NSLayoutAttributeWidth
+                                                        multiplier:1
+                                                          constant:0],
+                            [NSLayoutConstraint constraintWithItem:secondMapView
+                                                         attribute:NSLayoutAttributeTop
+                                                         relatedBy:NSLayoutRelationEqual
+                                                            toItem:self.view
+                                                         attribute:NSLayoutAttributeCenterY
+                                                        multiplier:1
+                                                          constant:0],
+                            [NSLayoutConstraint constraintWithItem:secondMapView
+                                                         attribute:NSLayoutAttributeBottom
+                                                         relatedBy:NSLayoutRelationEqual
+                                                            toItem:self.bottomLayoutGuide
+                                                         attribute:NSLayoutAttributeTop
+                                                        multiplier:1
+                                                          constant:0],
+                        ]];
+                    } else {
+                        NSMutableArray *constraintsToRemove = [NSMutableArray array];
+                        MGLMapView *secondMapView = (MGLMapView *)[self.view viewWithTag:2];
+                        for (NSLayoutConstraint *constraint in self.view.constraints)
+                        {
+                            if (constraint.firstItem == secondMapView || constraint.secondItem == secondMapView)
+                            {
+                                [constraintsToRemove addObject:constraint];
+                            }
+                        }
+                        [self.view removeConstraints:constraintsToRemove];
+                        [secondMapView removeFromSuperview];
+                        [self.view addConstraint:[NSLayoutConstraint constraintWithItem:self.mapView
+                                                                              attribute:NSLayoutAttributeBottom
+                                                                              relatedBy:NSLayoutRelationEqual
+                                                                                 toItem:self.bottomLayoutGuide
+                                                                              attribute:NSLayoutAttributeTop
+                                                                             multiplier:1
+                                                                               constant:0]];
+                    }
+                    break;
                 default:
                     NSAssert(NO, @"All core rendering setting rows should be implemented");
                     break;
@@ -413,6 +499,9 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
                     break;
                 case MBXSettingsAnnotations10000Sprites:
                     [self parseFeaturesAddingCount:10000 usingViews:NO];
+                    break;
+                case MBXSettingsAnnotationAnimation:
+                    [self animateAnnotationView];
                     break;
                 case MBXSettingsAnnotationsTestShapes:
                     [self addTestShapes];
@@ -522,8 +611,23 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
                     break;
                 case MBXSettingsMiscellaneousShowReuseQueueStats:
                 {
-                    self.reuseQueueStatsEnabled = YES;
-                    self.hudLabel.hidden = NO;
+                    self.reuseQueueStatsEnabled = !self.reuseQueueStatsEnabled;
+                    self.hudLabel.hidden = !self.reuseQueueStatsEnabled;
+                    self.showZoomLevelEnabled = NO;
+                    break;
+                }
+                case MBXSettingsMiscellaneousShowZoomLevel:
+                {
+                    self.showZoomLevelEnabled = !self.showZoomLevelEnabled;
+                    self.hudLabel.hidden = !self.showZoomLevelEnabled;
+                    self.reuseQueueStatsEnabled = NO;
+                    break;
+                }
+                case MBXSettingsMiscellaneousScrollView:
+                {
+                    UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"Main" bundle:nil];
+                    MBXEmbeddedMapViewController *embeddedMapViewController = (MBXEmbeddedMapViewController *)[storyboard instantiateViewControllerWithIdentifier:@"MBXEmbeddedMapViewController"];
+                    [self.navigationController pushViewController:embeddedMapViewController animated:YES];
                     break;
                 }
                 default:
@@ -613,6 +717,23 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
         }
     });
 }
+
+- (void)animateAnnotationView
+    {
+        MGLPointAnnotation *annot = [[MGLPointAnnotation alloc] init];
+        annot.coordinate = self.mapView.centerCoordinate;
+        [self.mapView addAnnotation:annot];
+        
+        // Move the annotation to a point that is offscreen.
+        CGPoint point = CGPointMake(self.view.frame.origin.x - 200, CGRectGetMidY(self.view.frame));
+        
+        CLLocationCoordinate2D coord = [self.mapView convertPoint:point toCoordinateFromView:self.view];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [UIView animateWithDuration:10 animations:^{
+                annot.coordinate = coord;
+            }];
+        });
+    };
 
 - (void)addTestShapes
 {
@@ -826,8 +947,8 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
 
 - (void)styleBuildingLayer
 {
-    self.mapView.style.transitionDuration = 5;
-    self.mapView.style.transitionDelay = 1;
+    MGLTransition transition =  { 5,  1 };
+    self.mapView.style.transition = transition;
     MGLFillStyleLayer *buildingLayer = (MGLFillStyleLayer *)[self.mapView.style layerWithIdentifier:@"building"];
     buildingLayer.fillColor = [MGLStyleValue<UIColor *> valueWithRawValue:[UIColor purpleColor]];
 }
@@ -931,8 +1052,8 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
         [self.mapView.style addSource:source];
 
         MGLFillStyleLayer *fillLayer = [[MGLFillStyleLayer alloc] initWithIdentifier:queryLayerID source:source];
-        fillLayer.fillColor = [MGLStyleConstantValue<UIColor *> valueWithRawValue:[UIColor blueColor]];
-        fillLayer.fillOpacity = [MGLStyleConstantValue<NSNumber *> valueWithRawValue:@0.5];
+        fillLayer.fillColor = [MGLConstantStyleValue<UIColor *> valueWithRawValue:[UIColor blueColor]];
+        fillLayer.fillOpacity = [MGLConstantStyleValue<NSNumber *> valueWithRawValue:@0.5];
         [self.mapView.style addLayer:fillLayer];
     });
 }
@@ -1140,8 +1261,7 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
 
 - (void)styleRasterSource
 {
-    // 3rd party raster source requires NSAppTransportSecurity exception for stamen.com
-    NSArray *tileURLTemplates = @[@"http://a.tile.stamen.com/terrain-background/{z}/{x}/{y}.jpg"];
+    NSArray *tileURLTemplates = @[@"https://stamen-tiles.a.ssl.fastly.net/terrain-background/{z}/{x}/{y}.jpg"];
     MGLRasterSource *rasterSource = [[MGLRasterSource alloc] initWithIdentifier:@"style-raster-source-id" tileURLTemplates:tileURLTemplates options:@{
         MGLTileSourceOptionTileSize: @256,
     }];
@@ -1183,19 +1303,19 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
     [self.mapView.style addSource:routeSource];
 
     MGLLineStyleLayer *baseRouteLayer = [[MGLLineStyleLayer alloc] initWithIdentifier:@"style-base-route-layer" source:routeSource];
-    baseRouteLayer.lineColor = [MGLStyleConstantValue valueWithRawValue:[UIColor orangeColor]];
-    baseRouteLayer.lineWidth = [MGLStyleConstantValue valueWithRawValue:@20];
-    baseRouteLayer.lineOpacity = [MGLStyleConstantValue valueWithRawValue:@0.5];
-    baseRouteLayer.lineCap = [MGLStyleConstantValue valueWithRawValue:[NSValue valueWithMGLLineCap:MGLLineCapRound]];
-    baseRouteLayer.lineJoin = [MGLStyleConstantValue valueWithRawValue:[NSValue valueWithMGLLineJoin:MGLLineJoinRound]];
+    baseRouteLayer.lineColor = [MGLConstantStyleValue valueWithRawValue:[UIColor orangeColor]];
+    baseRouteLayer.lineWidth = [MGLConstantStyleValue valueWithRawValue:@20];
+    baseRouteLayer.lineOpacity = [MGLConstantStyleValue valueWithRawValue:@0.5];
+    baseRouteLayer.lineCap = [MGLConstantStyleValue valueWithRawValue:[NSValue valueWithMGLLineCap:MGLLineCapRound]];
+    baseRouteLayer.lineJoin = [MGLConstantStyleValue valueWithRawValue:[NSValue valueWithMGLLineJoin:MGLLineJoinRound]];
     [self.mapView.style addLayer:baseRouteLayer];
 
     MGLLineStyleLayer *routeLayer = [[MGLLineStyleLayer alloc] initWithIdentifier:@"style-route-layer" source:routeSource];
-    routeLayer.lineColor = [MGLStyleConstantValue valueWithRawValue:[UIColor whiteColor]];
-    routeLayer.lineWidth = [MGLStyleConstantValue valueWithRawValue:@15];
-    routeLayer.lineOpacity = [MGLStyleConstantValue valueWithRawValue:@0.8];
-    routeLayer.lineCap = [MGLStyleConstantValue valueWithRawValue:[NSValue valueWithMGLLineCap:MGLLineCapRound]];
-    routeLayer.lineJoin = [MGLStyleConstantValue valueWithRawValue:[NSValue valueWithMGLLineJoin:MGLLineJoinRound]];
+    routeLayer.lineColor = [MGLConstantStyleValue valueWithRawValue:[UIColor whiteColor]];
+    routeLayer.lineWidth = [MGLConstantStyleValue valueWithRawValue:@15];
+    routeLayer.lineOpacity = [MGLConstantStyleValue valueWithRawValue:@0.8];
+    routeLayer.lineCap = [MGLConstantStyleValue valueWithRawValue:[NSValue valueWithMGLLineCap:MGLLineCapRound]];
+    routeLayer.lineJoin = [MGLConstantStyleValue valueWithRawValue:[NSValue valueWithMGLLineJoin:MGLLineJoinRound]];
     [self.mapView.style addLayer:routeLayer];
 }
 
@@ -1251,22 +1371,21 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
         MGLSymbolStyleLayer *layer = (MGLSymbolStyleLayer *)[self.mapView.style layerWithIdentifier:layerName];
 
         if ([layer isKindOfClass:[MGLSymbolStyleLayer class]]) {
-            if ([layer.text isKindOfClass:[MGLStyleConstantValue class]]) {
-                MGLStyleConstantValue *label = (MGLStyleConstantValue<NSString *> *)layer.text;
+            if ([layer.text isKindOfClass:[MGLConstantStyleValue class]]) {
+                MGLConstantStyleValue *label = (MGLConstantStyleValue<NSString *> *)layer.text;
                 if ([label.rawValue hasPrefix:@"{name"]) {
                     layer.text = [MGLStyleValue valueWithRawValue:language];
                 }
             }
             else if ([layer.text isKindOfClass:[MGLCameraStyleFunction class]]) {
                 MGLCameraStyleFunction *function = (MGLCameraStyleFunction<NSString *> *)layer.text;
-                [function.stops enumerateKeysAndObjectsUsingBlock:^(id zoomLevel, id stop, BOOL *done) {
-                    if ([stop isKindOfClass:[MGLStyleConstantValue class]]) {
-                        MGLStyleConstantValue *label = (MGLStyleConstantValue<NSString *> *)stop;
-                        if ([label.rawValue hasPrefix:@"{name"]) {
-                            [function.stops setValue:[MGLStyleValue valueWithRawValue:language] forKey:zoomLevel];
-                        }
+                NSMutableDictionary *stops = function.stops.mutableCopy;
+                [stops enumerateKeysAndObjectsUsingBlock:^(NSNumber *zoomLevel, MGLConstantStyleValue<NSString *> *stop, BOOL *done) {
+                    if ([stop.rawValue hasPrefix:@"{name"]) {
+                        stops[zoomLevel] = [MGLStyleValue<NSString *> valueWithRawValue:language];
                     }
                 }];
+                function.stops = stops;
                 layer.text = function;
             }
         } else {
@@ -1277,19 +1396,20 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
 
 - (NSString *)bestLanguageForUser
 {
-    NSArray *supportedLanguages = @[ @"en", @"es", @"fr", @"de", @"ru", @"zh" ];
-    NSArray<NSString *> *preferredLanguages = [NSLocale preferredLanguages];
-    NSString *bestLanguage;
+    // https://www.mapbox.com/vector-tiles/mapbox-streets-v7/#overview
+    NSArray *supportedLanguages = @[ @"ar", @"en", @"es", @"fr", @"de", @"pt", @"ru", @"zh", @"zh-Hans" ];
+    NSArray<NSString *> *preferredLanguages = [NSBundle preferredLocalizationsFromArray:supportedLanguages forPreferences:[NSLocale preferredLanguages]];
+    NSString *mostSpecificLanguage;
 
-    for (NSString *language in preferredLanguages) {
-        NSString *thisLanguage = [[NSLocale localeWithLocaleIdentifier:language] objectForKey:NSLocaleLanguageCode];
-        if ([supportedLanguages containsObject:thisLanguage]) {
-            bestLanguage = thisLanguage;
-            break;
+    for (NSString *language in preferredLanguages)
+    {
+        if (language.length > mostSpecificLanguage.length)
+        {
+            mostSpecificLanguage = language;
         }
     }
 
-    return bestLanguage ?: @"en";
+    return mostSpecificLanguage ?: @"en";
 }
 
 - (IBAction)startWorldTour
@@ -1423,14 +1543,18 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
             @"Dark",
             @"Satellite",
             @"Satellite Streets",
+            @"Traffic Day",
+            @"Traffic Night",
         ];
         styleURLs = @[
-            [MGLStyle streetsStyleURLWithVersion:MGLStyleDefaultVersion],
-            [MGLStyle outdoorsStyleURLWithVersion:MGLStyleDefaultVersion],
-            [MGLStyle lightStyleURLWithVersion:MGLStyleDefaultVersion],
-            [MGLStyle darkStyleURLWithVersion:MGLStyleDefaultVersion],
-            [MGLStyle satelliteStyleURLWithVersion:MGLStyleDefaultVersion],
-            [MGLStyle satelliteStreetsStyleURLWithVersion:MGLStyleDefaultVersion],
+            [MGLStyle streetsStyleURL],
+            [MGLStyle outdoorsStyleURL],
+            [MGLStyle lightStyleURL],
+            [MGLStyle darkStyleURL],
+            [MGLStyle satelliteStyleURL],
+            [MGLStyle satelliteStreetsStyleURL],
+            [MGLStyle trafficDayStyleURL],
+            [MGLStyle trafficNightStyleURL],
         ];
         NSAssert(styleNames.count == styleURLs.count, @"Style names and URLs don’t match.");
 
@@ -1651,7 +1775,7 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
     }];
 }
 
-- (UIView<MGLCalloutView> *)mapView:(__unused MGLMapView *)mapView calloutViewForAnnotation:(id<MGLAnnotation>)annotation
+- (nullable id <MGLCalloutView>)mapView:(__unused MGLMapView *)mapView calloutViewForAnnotation:(id<MGLAnnotation>)annotation
 {
     if ([annotation respondsToSelector:@selector(title)]
         && [annotation isKindOfClass:[MBXCustomCalloutAnnotation class]])
@@ -1711,7 +1835,15 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
         {
             queuedAnnotations += queue.count;
         }
-        self.hudLabel.text = [NSString stringWithFormat:@"Visible: %ld  Queued: %ld", (unsigned long)mapView.visibleAnnotations.count, (unsigned long)queuedAnnotations];
+        self.hudLabel.text = [NSString stringWithFormat:@" Visible: %ld  Queued: %ld", (unsigned long)mapView.visibleAnnotations.count, (unsigned long)queuedAnnotations];
+    } else if (self.showZoomLevelEnabled) {
+        self.hudLabel.text = [NSString stringWithFormat:@" Zoom: %.2f", self.mapView.zoomLevel];
+    }
+}
+
+- (void)mapView:(MGLMapView *)mapView regionDidChangeAnimated:(BOOL)animated {
+    if (self.showZoomLevelEnabled) {
+        self.hudLabel.text = [NSString stringWithFormat:@" Zoom: %.2f", self.mapView.zoomLevel];
     }
 }
 

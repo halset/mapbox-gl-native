@@ -1,5 +1,5 @@
 // This file is generated.
-// Edit platform/darwin/scripts/generate-style-code.js, then run `make style-code-darwin`.
+// Edit platform/darwin/scripts/generate-style-code.js, then run `make darwin-style-code`.
 
 #import "MGLFoundation.h"
 #import "MGLStyleValue.h"
@@ -280,6 +280,21 @@ typedef NS_ENUM(NSUInteger, MGLTextTranslationAnchor) {
 MGL_EXPORT
 @interface MGLSymbolStyleLayer : MGLVectorStyleLayer
 
+/**
+ Returns a symbol style layer initialized with an identifier and source.
+
+ After initializing and configuring the style layer, add it to a map view’s
+ style using the `-[MGLStyle addLayer:]` or
+ `-[MGLStyle insertLayer:belowLayer:]` method.
+
+ @param identifier A string that uniquely identifies the source in the style to
+    which it is added.
+ @param source The source from which to obtain the data to style. If the source
+    has not yet been added to the current style, the behavior is undefined.
+ @return An initialized foreground style layer.
+ */
+- (instancetype)initWithIdentifier:(NSString *)identifier source:(MGLSource *)source;
+
 #pragma mark - Accessing the Layout Attributes
 
 /**
@@ -299,7 +314,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -324,7 +339,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -334,7 +349,8 @@ MGL_EXPORT
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *iconIgnorePlacement __attribute__((unavailable("Use iconIgnoresPlacement instead.")));
 
 /**
- A string with {tokens} replaced, referencing the data property to pull from.
+ Name of image in sprite to use for drawing an image background. A string with
+ {tokens} replaced, referencing the data property to pull from.
  
  This attribute corresponds to the <a
  href="https://www.mapbox.com/mapbox-gl-style-spec/#layout-symbol-icon-image"><code>icon-image</code></a>
@@ -342,9 +358,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
- * `MGLCameraStyleFunction` with an interpolation mode of
- `MGLInterpolationModeInterval`
+ * `MGLConstantStyleValue`
+ * `MGLCameraStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSString *> *iconImageName;
 
@@ -364,7 +390,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -392,7 +418,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -422,7 +448,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -443,7 +469,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -468,7 +494,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -500,7 +526,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -522,10 +548,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *iconScale;
 
@@ -544,7 +579,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -567,7 +602,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -590,7 +625,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -617,7 +652,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -646,7 +681,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -674,7 +709,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -702,7 +737,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -728,7 +763,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -746,7 +781,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -767,7 +802,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -776,7 +811,8 @@ MGL_EXPORT
 
 /**
  Value to use for a text label. Feature properties are specified using tokens
- like {field_name}.
+ like {field_name}.  (Token replacement is only supported for literal
+ `textField` values--not for property functions.)
  
  The default value of this property is an `MGLStyleValue` object containing the
  empty string. Set this property to `nil` to reset it to the default value.
@@ -787,9 +823,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
- * `MGLCameraStyleFunction` with an interpolation mode of
- `MGLInterpolationModeInterval`
+ * `MGLConstantStyleValue`
+ * `MGLCameraStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSString *> *text;
 
@@ -813,7 +859,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -834,7 +880,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -866,7 +912,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -893,10 +939,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *textFontSize;
 
@@ -919,7 +974,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -944,7 +999,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -967,7 +1022,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -988,7 +1043,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -1010,10 +1065,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSValue *> *textOffset;
 #else
@@ -1031,10 +1095,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSValue *> *textOffset;
 #endif
@@ -1052,7 +1125,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -1073,7 +1146,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -1092,7 +1165,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -1116,10 +1189,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *textRotation;
 
@@ -1139,7 +1221,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -1157,9 +1239,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
- * `MGLCameraStyleFunction` with an interpolation mode of
- `MGLInterpolationModeInterval`
+ * `MGLConstantStyleValue`
+ * `MGLCameraStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSValue *> *textTransform;
 
@@ -1179,10 +1271,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<UIColor *> *iconColor;
 #else
@@ -1199,13 +1300,29 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSColor *> *iconColor;
 #endif
+
+/**
+ The transition affecting any changes to this layer’s `iconColor` property.
+
+ This property corresponds to the `icon-color-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition iconColorTransition;
 
 /**
  Fade out the halo towards the outside.
@@ -1221,12 +1338,28 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *iconHaloBlur;
+
+/**
+ The transition affecting any changes to this layer’s `iconHaloBlur` property.
+
+ This property corresponds to the `icon-halo-blur-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition iconHaloBlurTransition;
 
 #if TARGET_OS_IPHONE
 /**
@@ -1242,10 +1375,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<UIColor *> *iconHaloColor;
 #else
@@ -1262,13 +1404,29 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSColor *> *iconHaloColor;
 #endif
+
+/**
+ The transition affecting any changes to this layer’s `iconHaloColor` property.
+
+ This property corresponds to the `icon-halo-color-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition iconHaloColorTransition;
 
 /**
  Distance of halo to the icon outline.
@@ -1284,12 +1442,28 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *iconHaloWidth;
+
+/**
+ The transition affecting any changes to this layer’s `iconHaloWidth` property.
+
+ This property corresponds to the `icon-halo-width-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition iconHaloWidthTransition;
 
 /**
  The opacity at which the icon will be drawn.
@@ -1303,12 +1477,28 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *iconOpacity;
+
+/**
+ The transition affecting any changes to this layer’s `iconOpacity` property.
+
+ This property corresponds to the `icon-opacity-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition iconOpacityTransition;
 
 #if TARGET_OS_IPHONE
 /**
@@ -1329,7 +1519,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -1354,13 +1544,20 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSValue *> *iconTranslation;
 #endif
+
+/**
+ The transition affecting any changes to this layer’s `iconTranslation` property.
+
+ This property corresponds to the `icon-translate-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition iconTranslationTransition;
 
 @property (nonatomic, null_resettable) MGLStyleValue<NSValue *> *iconTranslate __attribute__((unavailable("Use iconTranslation instead.")));
 
@@ -1380,7 +1577,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */
@@ -1401,10 +1598,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<UIColor *> *textColor;
 #else
@@ -1420,13 +1626,29 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSColor *> *textColor;
 #endif
+
+/**
+ The transition affecting any changes to this layer’s `textColor` property.
+
+ This property corresponds to the `text-color-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition textColorTransition;
 
 /**
  The halo's fadeout distance towards the outside.
@@ -1442,12 +1664,28 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *textHaloBlur;
+
+/**
+ The transition affecting any changes to this layer’s `textHaloBlur` property.
+
+ This property corresponds to the `text-halo-blur-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition textHaloBlurTransition;
 
 #if TARGET_OS_IPHONE
 /**
@@ -1462,10 +1700,19 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<UIColor *> *textHaloColor;
 #else
@@ -1481,13 +1728,29 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSColor *> *textHaloColor;
 #endif
+
+/**
+ The transition affecting any changes to this layer’s `textHaloColor` property.
+
+ This property corresponds to the `text-halo-color-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition textHaloColorTransition;
 
 /**
  Distance of halo to the font outline. Max text halo width is 1/4 of the
@@ -1504,12 +1767,28 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *textHaloWidth;
+
+/**
+ The transition affecting any changes to this layer’s `textHaloWidth` property.
+
+ This property corresponds to the `text-halo-width-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition textHaloWidthTransition;
 
 /**
  The opacity at which the text will be drawn.
@@ -1523,12 +1802,28 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
+ * `MGLSourceStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
+   * `MGLInterpolationModeIdentity`
+ * `MGLCompositeStyleFunction` with an interpolation mode of:
+   * `MGLInterpolationModeExponential`
+   * `MGLInterpolationModeInterval`
+   * `MGLInterpolationModeCategorical`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSNumber *> *textOpacity;
+
+/**
+ The transition affecting any changes to this layer’s `textOpacity` property.
+
+ This property corresponds to the `text-opacity-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition textOpacityTransition;
 
 #if TARGET_OS_IPHONE
 /**
@@ -1549,7 +1844,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
@@ -1574,13 +1869,20 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of:
    * `MGLInterpolationModeExponential`
    * `MGLInterpolationModeInterval`
  */
 @property (nonatomic, null_resettable) MGLStyleValue<NSValue *> *textTranslation;
 #endif
+
+/**
+ The transition affecting any changes to this layer’s `textTranslation` property.
+
+ This property corresponds to the `text-translate-transition` property in the style JSON file format.
+*/
+@property (nonatomic) MGLTransition textTranslationTransition;
 
 @property (nonatomic, null_resettable) MGLStyleValue<NSValue *> *textTranslate __attribute__((unavailable("Use textTranslation instead.")));
 
@@ -1600,7 +1902,7 @@ MGL_EXPORT
  
  You can set this property to an instance of:
  
- * `MGLStyleConstantValue`
+ * `MGLConstantStyleValue`
  * `MGLCameraStyleFunction` with an interpolation mode of
  `MGLInterpolationModeInterval`
  */

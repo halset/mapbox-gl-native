@@ -26,6 +26,7 @@ import com.mapbox.mapboxsdk.style.layers.<%- camelize(type) %>Layer;
 import com.mapbox.mapboxsdk.testapp.R;
 import com.mapbox.mapboxsdk.testapp.activity.style.RuntimeStyleTestActivity;
 import com.mapbox.mapboxsdk.testapp.utils.OnMapReadyIdlingResource;
+import com.mapbox.mapboxsdk.testapp.activity.BaseActivityTest;
 
 import org.junit.After;
 import org.junit.Before;
@@ -40,27 +41,23 @@ import static org.junit.Assert.*;
 import static com.mapbox.mapboxsdk.style.layers.Property.*;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.*;
 
+import com.mapbox.mapboxsdk.style.layers.TransitionOptions;
+import com.mapbox.mapboxsdk.testapp.activity.espresso.EspressoTestActivity;
+
 /**
  * Basic smoke tests for <%- camelize(type) %>Layer
  */
 @RunWith(AndroidJUnit4.class)
-public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
-
-  @Rule
-  public final ActivityTestRule<RuntimeStyleTestActivity> rule = new ActivityTestRule<>(RuntimeStyleTestActivity.class);
+public class <%- camelize(type) %>LayerTest extends BaseActivityTest {
 
   private <%- camelize(type) %>Layer layer;
 
-  private OnMapReadyIdlingResource idlingResource;
+  @Override
+  protected Class getActivityClass() {
+    return EspressoTestActivity.class;
+  }
 
-  private MapboxMap mapboxMap;
-
-  @Before
-  public void setup() {
-    idlingResource = new OnMapReadyIdlingResource(rule.getActivity());
-    Espresso.registerIdlingResources(idlingResource);
-    mapboxMap = rule.getActivity().getMapboxMap();
-
+  private void setupLayer(){
 <% if (type === 'background') { -%>
     Timber.i("Retrieving layer");
     layer = mapboxMap.getLayerAs("background");
@@ -78,7 +75,8 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
 
   @Test
   public void testSetVisibility() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("Visibility");
     assertNotNull(layer);
 
@@ -89,11 +87,45 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
     layer.setProperties(visibility(NONE));
     assertEquals(layer.getVisibility().getValue(), NONE);
   }
+<% if (!(type === 'background' || type === 'raster')) { -%>
 
+  @Test
+  public void testSourceLayer() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("SourceLayer");
+    assertNotNull(layer);
+
+    // Get initial
+    assertEquals(layer.getSourceLayer(), "composite");
+
+    // Set
+    final String sourceLayer = "test";
+    layer.setSourceLayer(sourceLayer);
+    assertEquals(layer.getSourceLayer(), sourceLayer);
+  }
+<% } -%>
 <% for (const property of properties) { -%>
+<% if (property.transition) { -%>
+
+  @Test
+  public void test<%- camelize(property.name) %>Transition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("<%- property.name %>TransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.set<%- camelize(property.name) %>Transition(options);
+    assertEquals(layer.get<%- camelize(property.name) %>Transition(), options);
+  }
+<% } -%>
+
   @Test
   public void test<%- camelize(property.name) %>AsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("<%- property.name %>");
     assertNotNull(layer);
 
@@ -105,7 +137,8 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
 
   @Test
   public void test<%- camelize(property.name) %>AsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("<%- property.name %>");
     assertNotNull(layer);
 
@@ -144,7 +177,8 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
 
   @Test
   public void test<%- camelize(property.name) %>AsIdentitySourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("<%- property.name %>");
     assertNotNull(layer);
 
@@ -164,7 +198,8 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
 
   @Test
   public void test<%- camelize(property.name) %>AsIntervalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("<%- property.name %>");
     assertNotNull(layer);
 
@@ -177,9 +212,9 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
 <% if (property.type == 'color') { -%>
             stop(Color.RED, <%- camelizeWithLeadingLowercase(property.name) %>(Color.RED))
 <% } else {-%>
-            1, <%- camelizeWithLeadingLowercase(property.name) %>(<%- defaultValueJava(property) %>))
-<% } -%>
+            stop(1, <%- camelizeWithLeadingLowercase(property.name) %>(<%- defaultValueJava(property) %>))
           )
+<% } -%>
         )
       )
     );
@@ -189,13 +224,14 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
     assertNotNull(layer.get<%- camelize(property.name) %>().getFunction());
     assertEquals(SourceFunction.class, layer.get<%- camelize(property.name) %>().getFunction().getClass());
     assertEquals("FeaturePropertyA", ((SourceFunction) layer.get<%- camelize(property.name) %>().getFunction()).getProperty());
-    assertEquals(IdentityStops.class, layer.get<%- camelize(property.name) %>().getFunction().getStops().getClass());
+    assertEquals(IntervalStops.class, layer.get<%- camelize(property.name) %>().getFunction().getStops().getClass());
   }
 <% } else if (property.type === 'array') { -%>
 
   @Test
   public void test<%- camelize(property.name) %>AsIntervalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("<%- property.name %>");
     assertNotNull(layer);
 
@@ -226,7 +262,8 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
 
   @Test
   public void test<%- camelize(property.name) %>AsExponentialSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("<%- property.name %>");
     assertNotNull(layer);
 
@@ -256,7 +293,8 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
 
   @Test
   public void test<%- camelize(property.name) %>AsCategoricalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("<%- property.name %>");
     assertNotNull(layer);
 
@@ -269,11 +307,11 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
 <% if (property.type == 'color') { -%>
             stop("valueA", <%- camelizeWithLeadingLowercase(property.name) %>(Color.RED))
           )
-        )
+        ).withDefaultValue(<%- camelizeWithLeadingLowercase(property.name) %>(Color.GREEN))
 <% } else {-%>
             stop(1.0f, <%- camelizeWithLeadingLowercase(property.name) %>(<%- defaultValueJava(property) %>))
           )
-        ).withDefaultValue(<%- defaultValueJava(property) %>)
+        ).withDefaultValue(<%- camelizeWithLeadingLowercase(property.name) %>(<%- defaultValueJava(property) %>))
 <% } -%>
       )
     );
@@ -284,15 +322,20 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
     assertEquals(SourceFunction.class, layer.get<%- camelize(property.name) %>().getFunction().getClass());
     assertEquals("FeaturePropertyA", ((SourceFunction) layer.get<%- camelize(property.name) %>().getFunction()).getProperty());
     assertEquals(CategoricalStops.class, layer.get<%- camelize(property.name) %>().getFunction().getStops().getClass());
-<% if (property.type !== 'color') { -%>
-    assertEquals(<%- defaultValueJava(property) %>, ((SourceFunction) layer.get<%- camelize(property.name) %>().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.get<%- camelize(property.name) %>().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.get<%- camelize(property.name) %>().getFunction()).getDefaultValue().getValue());
+<% if (property.type === 'color') { -%>
+    assertEquals(Color.GREEN, (int) ((SourceFunction) layer.get<%- camelize(property.name) %>().getFunction()).getDefaultValue().getColorInt());
+<% } else { -%>
+    assertEquals(<%- defaultValueJava(property) %>, ((SourceFunction) layer.get<%- camelize(property.name) %>().getFunction()).getDefaultValue().getValue());
 <% } -%>
   }
 <% if (property.type !== 'color') { -%>
 
   @Test
   public void test<%- camelize(property.name) %>AsCompositeFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("<%- property.name %>");
     assertNotNull(layer);
 
@@ -305,7 +348,7 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
             stop(0, 0.3f, <%- camelizeWithLeadingLowercase(property.name) %>(0.9f))
           ).withBase(0.5f)
 <% if (property.type == 'number') { -%>
-        ).withDefaultValue(<%- defaultValueJava(property) %>)
+        ).withDefaultValue(<%- camelizeWithLeadingLowercase(property.name) %>(<%- defaultValueJava(property) %>))
 <% } else { -%>
         )
 <% } -%>
@@ -334,7 +377,8 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
 
   @Test
   public void test<%- camelize(property.name) %>AsIntConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("<%- property.name %>");
     assertNotNull(layer);
 
@@ -343,11 +387,6 @@ public class <%- camelize(type) %>LayerTest extends BaseStyleTest {
     assertEquals(layer.get<%- camelize(property.name) %>AsInt(), Color.RED);
   }
 <% } -%>
-
 <% } -%>
 
-  @After
-  public void unregisterIntentServiceIdlingResource() {
-    Espresso.unregisterIdlingResources(idlingResource);
-  }
 }

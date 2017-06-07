@@ -55,13 +55,19 @@
 }
 
 - (void)testUnversionedStyleURLs {
+    XCTAssertEqual(mbgl::util::default_styles::streets.currentVersion, MGLStyleDefaultVersion,
+                   "mbgl::util::default_styles::streets.currentVersion and MGLStyleDefaultVersion disagree.");
+    
+    XCTAssertEqualObjects([MGLStyle streetsStyleURL].absoluteString, @(mbgl::util::default_styles::streets.url));
+    XCTAssertEqualObjects([MGLStyle outdoorsStyleURL].absoluteString, @(mbgl::util::default_styles::outdoors.url));
+    XCTAssertEqualObjects([MGLStyle lightStyleURL].absoluteString, @(mbgl::util::default_styles::light.url));
+    XCTAssertEqualObjects([MGLStyle darkStyleURL].absoluteString, @(mbgl::util::default_styles::dark.url));
+    XCTAssertEqualObjects([MGLStyle satelliteStyleURL].absoluteString, @(mbgl::util::default_styles::satellite.url));
+    XCTAssertEqualObjects([MGLStyle satelliteStreetsStyleURL].absoluteString, @(mbgl::util::default_styles::satelliteStreets.url));
+    
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    XCTAssertEqualObjects([MGLStyle streetsStyleURL].absoluteString, @"mapbox://styles/mapbox/streets-v8");
     XCTAssertEqualObjects([MGLStyle emeraldStyleURL].absoluteString, @"mapbox://styles/mapbox/emerald-v8");
-    XCTAssertEqualObjects([MGLStyle lightStyleURL].absoluteString, @"mapbox://styles/mapbox/light-v8");
-    XCTAssertEqualObjects([MGLStyle darkStyleURL].absoluteString, @"mapbox://styles/mapbox/dark-v8");
-    XCTAssertEqualObjects([MGLStyle satelliteStyleURL].absoluteString, @"mapbox://styles/mapbox/satellite-v8");
     XCTAssertEqualObjects([MGLStyle hybridStyleURL].absoluteString, @"mapbox://styles/mapbox/satellite-hybrid-v8");
 #pragma clang diagnostic pop
 }
@@ -69,20 +75,40 @@
 - (void)testVersionedStyleURLs {
     // Test that all the default styles have publicly-declared MGLStyle class
     // methods and that the URLs all have the right values.
-    XCTAssertEqualObjects([MGLStyle streetsStyleURLWithVersion:MGLStyleDefaultVersion].absoluteString, @(mbgl::util::default_styles::streets.url));
-    XCTAssertEqualObjects([MGLStyle streetsStyleURLWithVersion:99].absoluteString, @"mapbox://styles/mapbox/streets-v99");
-    XCTAssertEqualObjects([MGLStyle outdoorsStyleURLWithVersion:MGLStyleDefaultVersion].absoluteString, @(mbgl::util::default_styles::outdoors.url));
-    XCTAssertEqualObjects([MGLStyle outdoorsStyleURLWithVersion:99].absoluteString, @"mapbox://styles/mapbox/outdoors-v99");
-    XCTAssertEqualObjects([MGLStyle lightStyleURLWithVersion:MGLStyleDefaultVersion].absoluteString, @(mbgl::util::default_styles::light.url));
-    XCTAssertEqualObjects([MGLStyle lightStyleURLWithVersion:99].absoluteString, @"mapbox://styles/mapbox/light-v99");
-    XCTAssertEqualObjects([MGLStyle darkStyleURLWithVersion:MGLStyleDefaultVersion].absoluteString, @(mbgl::util::default_styles::dark.url));
-    XCTAssertEqualObjects([MGLStyle darkStyleURLWithVersion:99].absoluteString, @"mapbox://styles/mapbox/dark-v99");
-    XCTAssertEqualObjects([MGLStyle satelliteStyleURLWithVersion:MGLStyleDefaultVersion].absoluteString, @(mbgl::util::default_styles::satellite.url));
-    XCTAssertEqualObjects([MGLStyle satelliteStyleURLWithVersion:99].absoluteString, @"mapbox://styles/mapbox/satellite-v99");
-    XCTAssertEqualObjects([MGLStyle satelliteStreetsStyleURLWithVersion:MGLStyleDefaultVersion].absoluteString, @(mbgl::util::default_styles::satelliteStreets.url));
-    XCTAssertEqualObjects([MGLStyle satelliteStreetsStyleURLWithVersion:99].absoluteString, @"mapbox://styles/mapbox/satellite-streets-v99");
+    XCTAssertEqualObjects([MGLStyle streetsStyleURLWithVersion:mbgl::util::default_styles::streets.currentVersion].absoluteString,
+                          @(mbgl::util::default_styles::streets.url));
+    XCTAssertEqualObjects([MGLStyle streetsStyleURLWithVersion:99].absoluteString,
+                          @"mapbox://styles/mapbox/streets-v99");
+    XCTAssertEqualObjects([MGLStyle outdoorsStyleURLWithVersion:mbgl::util::default_styles::outdoors.currentVersion].absoluteString,
+                          @(mbgl::util::default_styles::outdoors.url));
+    XCTAssertEqualObjects([MGLStyle outdoorsStyleURLWithVersion:99].absoluteString,
+                          @"mapbox://styles/mapbox/outdoors-v99");
+    XCTAssertEqualObjects([MGLStyle lightStyleURLWithVersion:mbgl::util::default_styles::light.currentVersion].absoluteString,
+                          @(mbgl::util::default_styles::light.url));
+    XCTAssertEqualObjects([MGLStyle lightStyleURLWithVersion:99].absoluteString,
+                          @"mapbox://styles/mapbox/light-v99");
+    XCTAssertEqualObjects([MGLStyle darkStyleURLWithVersion:mbgl::util::default_styles::dark.currentVersion].absoluteString,
+                          @(mbgl::util::default_styles::dark.url));
+    XCTAssertEqualObjects([MGLStyle darkStyleURLWithVersion:99].absoluteString,
+                          @"mapbox://styles/mapbox/dark-v99");
+    XCTAssertEqualObjects([MGLStyle satelliteStyleURLWithVersion:mbgl::util::default_styles::satellite.currentVersion].absoluteString,
+                          @(mbgl::util::default_styles::satellite.url));
+    XCTAssertEqualObjects([MGLStyle satelliteStyleURLWithVersion:99].absoluteString,
+                          @"mapbox://styles/mapbox/satellite-v99");
+    XCTAssertEqualObjects([MGLStyle satelliteStreetsStyleURLWithVersion:mbgl::util::default_styles::satelliteStreets.currentVersion].absoluteString,
+                          @(mbgl::util::default_styles::satelliteStreets.url));
+    XCTAssertEqualObjects([MGLStyle satelliteStreetsStyleURLWithVersion:99].absoluteString,
+                          @"mapbox://styles/mapbox/satellite-streets-v99");
+    XCTAssertEqualObjects([MGLStyle trafficDayStyleURLWithVersion:mbgl::util::default_styles::trafficDay.currentVersion].absoluteString,
+                          @(mbgl::util::default_styles::trafficDay.url));
+    XCTAssertEqualObjects([MGLStyle trafficDayStyleURLWithVersion:99].absoluteString,
+                          @"mapbox://styles/mapbox/traffic-day-v99");
+    XCTAssertEqualObjects([MGLStyle trafficNightStyleURLWithVersion:mbgl::util::default_styles::trafficNight.currentVersion].absoluteString,
+                          @(mbgl::util::default_styles::trafficNight.url));
+    XCTAssertEqualObjects([MGLStyle trafficNightStyleURLWithVersion:99].absoluteString,
+                          @"mapbox://styles/mapbox/traffic-night-v99");
 
-    static_assert(6 == mbgl::util::default_styles::numOrderedStyles,
+    static_assert(8 == mbgl::util::default_styles::numOrderedStyles,
                   "MGLStyleTests isn’t testing all the styles in mbgl::util::default_styles.");
 }
 
@@ -119,19 +145,6 @@
     XCTAssertNil(versionedMethodError, @"Error compiling regular expression to search for versioned methods.");
     NSUInteger numVersionedMethodDeclarations = [versionedMethodExpression numberOfMatchesInString:styleHeader options:0 range:NSMakeRange(0, styleHeader.length)];
     XCTAssertEqual(numVersionedMethodDeclarations, numVersionedMethods);
-
-    // Test that “current version is” statements are present and current for all versioned style methods.
-    NSError *versionError;
-    NSString *versionExpressionString = @(R"RE(current version is `(\d+)`)RE");
-    NSRegularExpression *versionExpression = [NSRegularExpression regularExpressionWithPattern:versionExpressionString options:0 error:&versionError];
-    XCTAssertNil(versionError, @"Error compiling regular expression to search for current version statements.");
-    NSUInteger numVersionDeclarations = [versionExpression numberOfMatchesInString:styleHeader options:0 range:NSMakeRange(0, styleHeader.length)];
-    XCTAssertEqual(numVersionDeclarations, numVersionedMethods);
-    [versionExpression enumerateMatchesInString:styleHeader options:0 range:NSMakeRange(0, styleHeader.length) usingBlock:^(NSTextCheckingResult * _Nullable result, NSMatchingFlags flags, BOOL * _Nonnull stop) {
-        XCTAssertEqual(result.numberOfRanges, 2, @"Regular expression should have one capture group.");
-        NSString *version = [styleHeader substringWithRange:[result rangeAtIndex:1]];
-        XCTAssertEqual([version integerValue], MGLStyleDefaultVersion, @"Versioned style URL method should document current version as %ld, not %ld.", MGLStyleDefaultVersion, version.integerValue);
-    }];
 }
 
 - (void)testName {
@@ -148,6 +161,7 @@
     MGLShapeSource *shapeSource = [[MGLShapeSource alloc] initWithIdentifier:@"shapeSource" shape:nil options:nil];
     [self.style addSource:shapeSource];
     XCTAssertEqual(self.style.sources.count, initialSources.count + 1);
+    XCTAssertEqual(shapeSource, [self.style sourceWithIdentifier:@"shapeSource"]);
     [self.style removeSource:shapeSource];
     XCTAssertEqual(self.style.sources.count, initialSources.count);
 }
@@ -174,6 +188,74 @@
     XCTAssertThrowsSpecificNamed([self.style addSource: source2], NSException, @"MGLRedundantSourceIdentifierException");
 }
 
+- (void)testRemovingSourcesBeforeAddingThem {
+    MGLRasterSource *rasterSource = [[MGLRasterSource alloc] initWithIdentifier:@"raster-source" tileURLTemplates:@[] options:nil];
+    [self.style removeSource:rasterSource];
+    [self.style addSource:rasterSource];
+    XCTAssertNotNil([self.style sourceWithIdentifier:rasterSource.identifier]);
+
+    MGLShapeSource *shapeSource = [[MGLShapeSource alloc] initWithIdentifier:@"shape-source" shape:nil options:nil];
+    [self.style removeSource:shapeSource];
+    [self.style addSource:shapeSource];
+    XCTAssertNotNil([self.style sourceWithIdentifier:shapeSource.identifier]);
+
+    MGLVectorSource *vectorSource = [[MGLVectorSource alloc] initWithIdentifier:@"vector-source" tileURLTemplates:@[] options:nil];
+    [self.style removeSource:vectorSource];
+    [self.style addSource:vectorSource];
+    XCTAssertNotNil([self.style sourceWithIdentifier:vectorSource.identifier]);
+}
+
+- (void)testAddingSourceOfTypeABeforeSourceOfTypeBWithSameIdentifier {
+    // Add a raster source
+    MGLRasterSource *rasterSource = [[MGLRasterSource alloc] initWithIdentifier:@"some-identifier" tileURLTemplates:@[] options:nil];
+    [self.style addSource:rasterSource];
+
+    // Attempt to remove a shape source with the same identifier as the raster source
+    MGLShapeSource *shapeSource = [[MGLShapeSource alloc] initWithIdentifier:@"some-identifier" shape:nil options:nil];
+    [self.style removeSource:shapeSource];
+    // The raster source should still be added
+    XCTAssertTrue([[self.style sourceWithIdentifier:rasterSource.identifier] isMemberOfClass:[MGLRasterSource class]]);
+
+    // Remove the raster source
+    [self.style removeSource:rasterSource];
+
+    // Add the shape source
+    [self.style addSource:shapeSource];
+
+    // Attempt to remove a vector source with the same identifer as the shape source
+    MGLVectorSource *vectorSource = [[MGLVectorSource alloc] initWithIdentifier:@"some-identifier" tileURLTemplates:@[] options:nil];
+    [self.style removeSource:vectorSource];
+    // The shape source should still be added
+    XCTAssertTrue([[self.style sourceWithIdentifier:shapeSource.identifier] isMemberOfClass:[MGLShapeSource class]]);
+
+    // Remove the shape source
+    [self.style removeSource:shapeSource];
+
+    // Add the vector source
+    [self.style addSource:vectorSource];
+
+    // Attempt to remove the previously created raster source that has the same identifer as the shape source
+    [self.style removeSource:rasterSource];
+    // The vector source should still be added
+    XCTAssertTrue([[self.style sourceWithIdentifier:shapeSource.identifier] isMemberOfClass:[MGLVectorSource class]]);
+}
+
+- (void)testRemovingSourceInUse {
+    // Add a raster source
+    MGLRasterSource *rasterSource = [[MGLRasterSource alloc] initWithIdentifier:@"some-identifier" tileURLTemplates:@[] options:nil];
+    [self.style addSource:rasterSource];
+    
+    // Add a layer using it
+    MGLFillStyleLayer *fillLayer = [[MGLFillStyleLayer alloc] initWithIdentifier:@"fillLayer" source:rasterSource];
+    [self.style addLayer:fillLayer];
+
+    // Attempt to remove the raster source
+    [self.style removeSource:rasterSource];
+    
+    // Ensure it is still there
+    XCTAssertTrue([[self.style sourceWithIdentifier:rasterSource.identifier] isMemberOfClass:[MGLRasterSource class]]);
+}
+
 - (void)testLayers {
     NSArray<MGLStyleLayer *> *initialLayers = self.style.layers;
     if ([initialLayers.firstObject.identifier isEqualToString:@"com.mapbox.annotations.points"]) {
@@ -186,6 +268,7 @@
     MGLFillStyleLayer *fillLayer = [[MGLFillStyleLayer alloc] initWithIdentifier:@"fillLayer" source:shapeSource];
     [self.style addLayer:fillLayer];
     XCTAssertEqual(self.style.layers.count, initialLayers.count + 1);
+    XCTAssertEqual(fillLayer, [self.style layerWithIdentifier:@"fillLayer"]);
     [self.style removeLayer:fillLayer];
     XCTAssertEqual(self.style.layers.count, initialLayers.count);
 }
@@ -233,6 +316,58 @@
     XCTAssertThrowsSpecificNamed([self.style insertLayer:[[MGLFillStyleLayer alloc] initWithIdentifier:@"my-layer" source:source] aboveLayer:initial], NSException, @"MGLRedundantLayerIdentifierException");
     XCTAssertThrowsSpecificNamed([self.style insertLayer:[[MGLFillStyleLayer alloc] initWithIdentifier:@"my-layer" source:source] atIndex:0], NSException, @"MGLRedundantLayerIdentifierException");
     XCTAssertThrowsSpecificNamed([self.style insertLayer:[[MGLOpenGLStyleLayer alloc] initWithIdentifier:@"my-layer"] atIndex:0], NSException, @"MGLRedundantLayerIdentifierException");
+}
+
+- (void)testRemovingLayerBeforeAddingSameLayer {
+    MGLShapeSource *source = [[MGLShapeSource alloc] initWithIdentifier:@"shape-source-removing-before-adding" shape:nil options:nil];
+
+    // Attempting to find a layer with identifier will trigger an exception if the source associated with the layer is not added
+    [self.style addSource:source];
+
+    MGLFillStyleLayer *fillLayer = [[MGLFillStyleLayer alloc] initWithIdentifier:@"fill-layer" source:source];
+    [self.style removeLayer:fillLayer];
+    [self.style addLayer:fillLayer];
+    XCTAssertNotNil([self.style layerWithIdentifier:fillLayer.identifier]);
+
+    MGLRasterStyleLayer *rasterLayer = [[MGLRasterStyleLayer alloc] initWithIdentifier:@"raster-layer" source:source];
+    [self.style removeLayer:rasterLayer];
+    [self.style addLayer:rasterLayer];
+    XCTAssertNotNil([self.style layerWithIdentifier:rasterLayer.identifier]);
+
+    MGLSymbolStyleLayer *symbolLayer = [[MGLSymbolStyleLayer alloc] initWithIdentifier:@"symbol-layer" source:source];
+    [self.style removeLayer:symbolLayer];
+    [self.style addLayer:symbolLayer];
+    XCTAssertNotNil([self.style layerWithIdentifier:symbolLayer.identifier]);
+
+    MGLLineStyleLayer *lineLayer = [[MGLLineStyleLayer alloc] initWithIdentifier:@"line-layer" source:source];
+    [self.style removeLayer:lineLayer];
+    [self.style addLayer:lineLayer];
+    XCTAssertNotNil([self.style layerWithIdentifier:lineLayer.identifier]);
+
+    MGLCircleStyleLayer *circleLayer = [[MGLCircleStyleLayer alloc] initWithIdentifier:@"circle-layer" source:source];
+    [self.style removeLayer:circleLayer];
+    [self.style addLayer:circleLayer];
+    XCTAssertNotNil([self.style layerWithIdentifier:circleLayer.identifier]);
+
+    MGLBackgroundStyleLayer *backgroundLayer = [[MGLBackgroundStyleLayer alloc] initWithIdentifier:@"background-layer"];
+    [self.style removeLayer:backgroundLayer];
+    [self.style addLayer:backgroundLayer];
+    XCTAssertNotNil([self.style layerWithIdentifier:backgroundLayer.identifier]);
+}
+
+- (void)testAddingLayerOfTypeABeforeRemovingLayerOfTypeBWithSameIdentifier {
+    MGLShapeSource *source = [[MGLShapeSource alloc] initWithIdentifier:@"shape-source-identifier" shape:nil options:nil];
+    [self.style addSource:source];
+
+    // Add a fill layer
+    MGLFillStyleLayer *fillLayer = [[MGLFillStyleLayer alloc] initWithIdentifier:@"some-identifier" source:source];
+    [self.style addLayer:fillLayer];
+
+    // Attempt to remove a line layer with the same identifier as the fill layer
+    MGLLineStyleLayer *lineLayer = [[MGLLineStyleLayer alloc] initWithIdentifier:fillLayer.identifier source:source];
+    [self.style removeLayer:lineLayer];
+
+    XCTAssertTrue([[self.style layerWithIdentifier:fillLayer.identifier] isMemberOfClass:[MGLFillStyleLayer class]]);
 }
 
 - (NSString *)stringWithContentsOfStyleHeader {

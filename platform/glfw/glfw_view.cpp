@@ -1,19 +1,21 @@
 #include "glfw_view.hpp"
 
 #include <mbgl/annotation/annotation.hpp>
-#include <mbgl/sprite/sprite_image.hpp>
+#include <mbgl/style/image.hpp>
 #include <mbgl/style/transition_options.hpp>
-#include <mbgl/gl/gl.hpp>
-#include <mbgl/gl/extension.hpp>
-#include <mbgl/gl/context.hpp>
 #include <mbgl/util/logging.hpp>
 #include <mbgl/util/platform.hpp>
 #include <mbgl/util/string.hpp>
 #include <mbgl/util/chrono.hpp>
+#include <mbgl/map/backend_scope.hpp>
 #include <mbgl/map/camera.hpp>
 
-#include <mbgl/gl/state.hpp>
-#include <mbgl/gl/value.hpp>
+#if MBGL_USE_GLES2
+#define GLFW_INCLUDE_ES2
+#endif // MBGL_USE_GLES2
+
+#define GL_GLEXT_PROTOTYPES
+#include <GLFW/glfw3.h>
 
 #include <cassert>
 #include <cstdlib>
@@ -27,7 +29,7 @@ GLFWView::GLFWView(bool fullscreen_, bool benchmark_)
     : fullscreen(fullscreen_), benchmark(benchmark_) {
     glfwSetErrorCallback(glfwError);
 
-    std::srand(std::time(nullptr));
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
     if (!glfwInit()) {
         mbgl::Log::Error(mbgl::Event::OpenGL, "failed to initialize glfw");
@@ -85,8 +87,6 @@ GLFWView::GLFWView(bool fullscreen_, bool benchmark_)
     glfwSetScrollCallback(window, onScroll);
     glfwSetKeyCallback(window, onKey);
 
-    mbgl::gl::InitializeExtensions(glfwGetProcAddress);
-
     glfwGetWindowSize(window, &width, &height);
     glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
     pixelRatio = static_cast<float>(fbWidth) / width;
@@ -109,10 +109,11 @@ GLFWView::GLFWView(bool fullscreen_, bool benchmark_)
     printf("- Press `7` through `0` to add increasing numbers of shape annotations for testing\n");
     printf("\n");
     printf("- Press `Q` to remove annotations\n");
-    printf("- Press `P` to add a random custom runtime imagery annotation\n");
+    printf("- Press `K` to add a random custom runtime imagery annotation\n");
     printf("- Press `L` to add a random line annotation\n");
     printf("- Press `W` to pop the last-added annotation off\n");
     printf("\n");
+    printf("- Press `P` to pause tile requests\n");
     printf("- `Control` + mouse drag to rotate\n");
     printf("- `Shift` + mouse drag to tilt\n");
     printf("\n");
@@ -130,23 +131,21 @@ GLFWView::~GLFWView() {
 
 void GLFWView::setMap(mbgl::Map *map_) {
     map = map_;
-    map->addAnnotationIcon("default_marker", makeSpriteImage(22, 22, 1));
+    map->addAnnotationImage(makeImage("default_marker", 22, 22, 1));
 }
 
-void GLFWView::updateViewBinding() {
-    getContext().bindFramebuffer.setCurrentValue(0);
-    assert(mbgl::gl::value::BindFramebuffer::Get() == getContext().bindFramebuffer.getCurrentValue());
-    getContext().viewport.setCurrentValue({ 0, 0, getFramebufferSize() });
-    assert(mbgl::gl::value::Viewport::Get() == getContext().viewport.getCurrentValue());
+void GLFWView::updateAssumedState() {
+    assumeFramebufferBinding(0);
+    assumeViewportSize(getFramebufferSize());
 }
 
 void GLFWView::bind() {
-    getContext().bindFramebuffer = 0;
-    getContext().viewport = { 0, 0, getFramebufferSize() };
+    setFramebufferBinding(0);
+    setViewportSize(getFramebufferSize());
 }
 
 void GLFWView::onKey(GLFWwindow *window, int key, int /*scancode*/, int action, int mods) {
-    GLFWView *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
+    auto *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
 
     if (action == GLFW_RELEASE) {
         switch (key) {
@@ -163,17 +162,6 @@ void GLFWView::onKey(GLFWwindow *window, int key, int /*scancode*/, int action, 
         case GLFW_KEY_S:
             if (view->changeStyleCallback)
                 view->changeStyleCallback();
-            break;
-        case GLFW_KEY_R:
-            if (!mods) {
-                static const mbgl::style::TransitionOptions transition { { mbgl::Milliseconds(300) } };
-                view->map->setTransitionOptions(transition);
-                if (view->map->hasClass("night")) {
-                    view->map->removeClass("night");
-                } else {
-                    view->map->addClass("night");
-                }
-            }
             break;
 #if not MBGL_USE_GLES2
         case GLFW_KEY_B: {
@@ -200,10 +188,13 @@ void GLFWView::onKey(GLFWwindow *window, int key, int /*scancode*/, int action, 
             auto result = view->map->queryPointAnnotations({ {}, { double(view->getSize().width), double(view->getSize().height) } });
             printf("visible point annotations: %lu\n", result.size());
         } break;
+        case GLFW_KEY_P:
+            view->pauseResumeCallback();
+            break;
         case GLFW_KEY_C:
             view->clearAnnotations();
             break;
-        case GLFW_KEY_P:
+        case GLFW_KEY_K:
             view->addRandomCustomPointAnnotations(1);
             break;
         case GLFW_KEY_L:
@@ -260,11 +251,11 @@ mbgl::Point<double> GLFWView::makeRandomPoint() const {
     const double x = width * double(std::rand()) / RAND_MAX;
     const double y = height * double(std::rand()) / RAND_MAX;
     mbgl::LatLng latLng = map->latLngForPixel({ x, y });
-    return { latLng.longitude, latLng.latitude };
+    return { latLng.longitude(), latLng.latitude() };
 }
 
-std::shared_ptr<const mbgl::SpriteImage>
-GLFWView::makeSpriteImage(int width, int height, float pixelRatio) {
+std::unique_ptr<mbgl::style::Image>
+GLFWView::makeImage(const std::string& id, int width, int height, float pixelRatio) {
     const int r = 255 * (double(std::rand()) / RAND_MAX);
     const int g = 255 * (double(std::rand()) / RAND_MAX);
     const int b = 255 * (double(std::rand()) / RAND_MAX);
@@ -289,7 +280,7 @@ GLFWView::makeSpriteImage(int width, int height, float pixelRatio) {
         }
     }
 
-    return std::make_shared<mbgl::SpriteImage>(std::move(image), pixelRatio);
+    return std::make_unique<mbgl::style::Image>(id, std::move(image), pixelRatio);
 }
 
 void GLFWView::nextOrientation() {
@@ -306,7 +297,7 @@ void GLFWView::addRandomCustomPointAnnotations(int count) {
     for (int i = 0; i < count; i++) {
         static int spriteID = 1;
         const auto name = std::string{ "marker-" } + mbgl::util::toString(spriteID++);
-        map->addAnnotationIcon(name, makeSpriteImage(22, 22, 1));
+        map->addAnnotationImage(makeImage(name, 22, 22, 1));
         spriteIDs.push_back(name);
         annotationIDs.push_back(map->addAnnotation(mbgl::SymbolAnnotation { makeRandomPoint(), name }));
     }
@@ -354,7 +345,7 @@ void GLFWView::popAnnotation() {
 }
 
 void GLFWView::onScroll(GLFWwindow *window, double /*xOffset*/, double yOffset) {
-    GLFWView *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
+    auto *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
     double delta = yOffset * 40;
 
     bool isWheel = delta != 0 && std::fmod(delta, 4.000244140625) == 0;
@@ -372,20 +363,21 @@ void GLFWView::onScroll(GLFWwindow *window, double /*xOffset*/, double yOffset) 
         scale = 1.0 / scale;
     }
 
-    view->map->scaleBy(scale, mbgl::ScreenCoordinate { view->lastX, view->lastY });
+    view->map->setZoom(view->map->getZoom() + std::log2(scale), mbgl::ScreenCoordinate { view->lastX, view->lastY });
 }
 
 void GLFWView::onWindowResize(GLFWwindow *window, int width, int height) {
-    GLFWView *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
+    auto *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
     view->width = width;
     view->height = height;
     view->map->setSize({ static_cast<uint32_t>(view->width), static_cast<uint32_t>(view->height) });
 }
 
 void GLFWView::onFramebufferResize(GLFWwindow *window, int width, int height) {
-    GLFWView *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
+    auto *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
     view->fbWidth = width;
     view->fbHeight = height;
+    view->bind();
 
     // This is only triggered when the framebuffer is resized, but not the window. It can
     // happen when you move the window between screens with a different pixel ratio.
@@ -395,7 +387,7 @@ void GLFWView::onFramebufferResize(GLFWwindow *window, int width, int height) {
 }
 
 void GLFWView::onMouseClick(GLFWwindow *window, int button, int action, int modifiers) {
-    GLFWView *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
+    auto *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
 
     if (button == GLFW_MOUSE_BUTTON_RIGHT ||
         (button == GLFW_MOUSE_BUTTON_LEFT && modifiers & GLFW_MOD_CONTROL)) {
@@ -412,9 +404,9 @@ void GLFWView::onMouseClick(GLFWwindow *window, int button, int action, int modi
             double now = glfwGetTime();
             if (now - view->lastClick < 0.4 /* ms */) {
                 if (modifiers & GLFW_MOD_SHIFT) {
-                    view->map->scaleBy(0.5, mbgl::ScreenCoordinate { view->lastX, view->lastY }, mbgl::Milliseconds(500));
+                    view->map->setZoom(view->map->getZoom() - 1, mbgl::ScreenCoordinate { view->lastX, view->lastY }, mbgl::AnimationOptions{{mbgl::Milliseconds(500)}});
                 } else {
-                    view->map->scaleBy(2.0, mbgl::ScreenCoordinate { view->lastX, view->lastY }, mbgl::Milliseconds(500));
+                    view->map->setZoom(view->map->getZoom() + 1, mbgl::ScreenCoordinate { view->lastX, view->lastY }, mbgl::AnimationOptions{{mbgl::Milliseconds(500)}});
                 }
             }
             view->lastClick = now;
@@ -423,7 +415,7 @@ void GLFWView::onMouseClick(GLFWwindow *window, int button, int action, int modi
 }
 
 void GLFWView::onMouseMove(GLFWwindow *window, double x, double y) {
-    GLFWView *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
+    auto *view = reinterpret_cast<GLFWView *>(glfwGetWindowUserPointer(window));
     if (view->tracking) {
         double dx = x - view->lastX;
         double dy = y - view->lastY;
@@ -456,9 +448,9 @@ void GLFWView::run() {
         if (dirty) {
             const double started = glfwGetTime();
 
-            glfwMakeContextCurrent(window);
+            activate();
+            mbgl::BackendScope scope { *this, mbgl::BackendScope::ScopeType::Implicit };
 
-            updateViewBinding();
             map->render(*this);
 
             glfwSwapBuffers(window);
@@ -490,6 +482,10 @@ mbgl::Size GLFWView::getSize() const {
 
 mbgl::Size GLFWView::getFramebufferSize() const {
     return { static_cast<uint32_t>(fbWidth), static_cast<uint32_t>(fbHeight) };
+}
+
+mbgl::gl::ProcAddress GLFWView::initializeExtension(const char* name) {
+    return glfwGetProcAddress(name);
 }
 
 void GLFWView::activate() {
@@ -533,16 +529,6 @@ void GLFWView::setWindowTitle(const std::string& title) {
     glfwSetWindowTitle(window, (std::string { "Mapbox GL: " } + title).c_str());
 }
 
-void GLFWView::setMapChangeCallback(std::function<void(mbgl::MapChange)> callback) {
-    this->mapChangeCallback = callback;
-}
-
-void GLFWView::notifyMapChange(mbgl::MapChange change) {
-    if (mapChangeCallback) {
-        mapChangeCallback(change);
-    }
-}
-
 namespace mbgl {
 namespace platform {
 
@@ -552,7 +538,7 @@ void showDebugImage(std::string name, const char *data, size_t width, size_t hei
 
     static GLFWwindow *debugWindow = nullptr;
     if (!debugWindow) {
-        debugWindow = glfwCreateWindow(width, height, name.c_str(), nullptr, nullptr);
+        debugWindow = glfwCreateWindow(static_cast<int>(width), static_cast<int>(height), name.c_str(), nullptr, nullptr);
         if (!debugWindow) {
             glfwTerminate();
             fprintf(stderr, "Failed to initialize window\n");
@@ -562,21 +548,16 @@ void showDebugImage(std::string name, const char *data, size_t width, size_t hei
 
     GLFWwindow *currentWindow = glfwGetCurrentContext();
 
-    glfwSetWindowSize(debugWindow, width, height);
+    glfwSetWindowSize(debugWindow, static_cast<int>(width), static_cast<int>(height));
     glfwMakeContextCurrent(debugWindow);
 
     int fbWidth, fbHeight;
     glfwGetFramebufferSize(debugWindow, &fbWidth, &fbHeight);
     float scale = static_cast<float>(fbWidth) / static_cast<float>(width);
 
-    {
-        gl::PreserveState<gl::value::PixelZoom> pixelZoom;
-        gl::PreserveState<gl::value::RasterPos> rasterPos;
-
-        MBGL_CHECK_ERROR(glPixelZoom(scale, -scale));
-        MBGL_CHECK_ERROR(glRasterPos2f(-1.0f, 1.0f));
-        MBGL_CHECK_ERROR(glDrawPixels(width, height, GL_LUMINANCE, GL_UNSIGNED_BYTE, data));
-    }
+    glPixelZoom(scale, -scale);
+    glRasterPos2f(-1.0f, 1.0f);
+    glDrawPixels(width, height, GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
 
     glfwSwapBuffers(debugWindow);
 
@@ -588,7 +569,7 @@ void showColorDebugImage(std::string name, const char *data, size_t logicalWidth
 
     static GLFWwindow *debugWindow = nullptr;
     if (!debugWindow) {
-        debugWindow = glfwCreateWindow(logicalWidth, logicalHeight, name.c_str(), nullptr, nullptr);
+        debugWindow = glfwCreateWindow(static_cast<int>(logicalWidth), static_cast<int>(logicalHeight), name.c_str(), nullptr, nullptr);
         if (!debugWindow) {
             glfwTerminate();
             fprintf(stderr, "Failed to initialize window\n");
@@ -598,7 +579,7 @@ void showColorDebugImage(std::string name, const char *data, size_t logicalWidth
 
     GLFWwindow *currentWindow = glfwGetCurrentContext();
 
-    glfwSetWindowSize(debugWindow, logicalWidth, logicalHeight);
+    glfwSetWindowSize(debugWindow, static_cast<int>(logicalWidth), static_cast<int>(logicalHeight));
     glfwMakeContextCurrent(debugWindow);
 
     int fbWidth, fbHeight;
@@ -606,21 +587,13 @@ void showColorDebugImage(std::string name, const char *data, size_t logicalWidth
     float xScale = static_cast<float>(fbWidth) / static_cast<float>(width);
     float yScale = static_cast<float>(fbHeight) / static_cast<float>(height);
 
-    {
-        gl::PreserveState<gl::value::ClearColor> clearColor;
-        gl::PreserveState<gl::value::Blend> blend;
-        gl::PreserveState<gl::value::BlendFunc> blendFunc;
-        gl::PreserveState<gl::value::PixelZoom> pixelZoom;
-        gl::PreserveState<gl::value::RasterPos> rasterPos;
-
-        MBGL_CHECK_ERROR(glClearColor(0.8, 0.8, 0.8, 1));
-        MBGL_CHECK_ERROR(glClear(GL_COLOR_BUFFER_BIT));
-        MBGL_CHECK_ERROR(glEnable(GL_BLEND));
-        MBGL_CHECK_ERROR(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
-        MBGL_CHECK_ERROR(glPixelZoom(xScale, -yScale));
-        MBGL_CHECK_ERROR(glRasterPos2f(-1.0f, 1.0f));
-        MBGL_CHECK_ERROR(glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, data));
-    }
+    glClearColor(0.8, 0.8, 0.8, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glPixelZoom(xScale, -yScale);
+    glRasterPos2f(-1.0f, 1.0f);
+    glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, data);
 
     glfwSwapBuffers(debugWindow);
 

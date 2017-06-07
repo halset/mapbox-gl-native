@@ -4,44 +4,37 @@
 #include <mbgl/style/observer.hpp>
 #include <mbgl/style/source_observer.hpp>
 #include <mbgl/style/layer_observer.hpp>
-#include <mbgl/style/update_batch.hpp>
-#include <mbgl/text/glyph_atlas_observer.hpp>
-#include <mbgl/sprite/sprite_atlas_observer.hpp>
-#include <mbgl/map/mode.hpp>
-#include <mbgl/map/zoom_history.hpp>
+#include <mbgl/style/light_observer.hpp>
+#include <mbgl/sprite/sprite_loader_observer.hpp>
+#include <mbgl/style/image.hpp>
+#include <mbgl/style/source.hpp>
+#include <mbgl/style/layer.hpp>
+#include <mbgl/style/collection.hpp>
 
 #include <mbgl/util/noncopyable.hpp>
-#include <mbgl/util/chrono.hpp>
 #include <mbgl/util/optional.hpp>
-#include <mbgl/util/feature.hpp>
 #include <mbgl/util/geo.hpp>
 
-#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 namespace mbgl {
 
+class Scheduler;
 class FileSource;
-class GlyphAtlas;
-class SpriteAtlas;
-class LineAtlas;
-class RenderData;
+class SpriteLoader;
 
 namespace style {
 
-class Layer;
-class UpdateParameters;
-class QueryParameters;
-
-class Style : public GlyphAtlasObserver,
-              public SpriteAtlasObserver,
+class Style : public SpriteLoaderObserver,
               public SourceObserver,
               public LayerObserver,
+              public LightObserver,
               public util::noncopyable {
 public:
-    Style(FileSource&, float pixelRatio);
+    Style(Scheduler&, FileSource&, float pixelRatio);
     ~Style() override;
 
     void setJSON(const std::string&);
@@ -50,27 +43,15 @@ public:
 
     bool isLoaded() const;
 
-    // Fetch the tiles needed by the current viewport and emit a signal when
-    // a tile is ready so observers can render the tile.
-    void updateTiles(const UpdateParameters&);
-
-    void relayout();
-    void cascade(const TimePoint&, MapMode);
-    void recalculate(float z, const TimePoint&, MapMode);
-
-    bool hasTransitions() const;
-
     std::exception_ptr getLastError() const {
         return lastError;
     }
 
-    std::vector<const Source*> getSources() const;
     std::vector<Source*> getSources();
     Source* getSource(const std::string& id) const;
     void addSource(std::unique_ptr<Source>);
     std::unique_ptr<Source> removeSource(const std::string& sourceID);
 
-    std::vector<const Layer*> getLayers() const;
     std::vector<Layer*> getLayers();
     Layer* getLayer(const std::string& id) const;
     Layer* addLayer(std::unique_ptr<Layer>,
@@ -83,37 +64,38 @@ public:
     double getDefaultBearing() const;
     double getDefaultPitch() const;
 
-    bool addClass(const std::string&);
-    bool removeClass(const std::string&);
-    void setClasses(const std::vector<std::string>&);
-
     TransitionOptions getTransitionOptions() const;
     void setTransitionOptions(const TransitionOptions&);
 
-    bool hasClass(const std::string&) const;
-    std::vector<std::string> getClasses() const;
+    void setLight(std::unique_ptr<Light>);
+    Light* getLight() const;
 
-    RenderData getRenderData(MapDebugOptions, float angle) const;
+    const style::Image* getImage(const std::string&) const;
+    void addImage(std::unique_ptr<style::Image>);
+    void removeImage(const std::string&);
 
-    std::vector<Feature> queryRenderedFeatures(const QueryParameters&) const;
+    const std::string& getGlyphURL() const;
 
-    float getQueryRadius() const;
-
-    void setSourceTileCacheSize(size_t);
-    void onLowMemory();
+    Immutable<std::vector<Immutable<Image::Impl>>> getImageImpls() const;
+    Immutable<std::vector<Immutable<Source::Impl>>> getSourceImpls() const;
+    Immutable<std::vector<Immutable<Layer::Impl>>> getLayerImpls() const;
 
     void dumpDebugLogs() const;
 
-    FileSource& fileSource;
-    std::unique_ptr<GlyphAtlas> glyphAtlas;
-    std::unique_ptr<SpriteAtlas> spriteAtlas;
-    std::unique_ptr<LineAtlas> lineAtlas;
+    bool loaded = false;
+    bool spriteLoaded = false;
 
 private:
-    std::vector<std::unique_ptr<Source>> sources;
-    std::vector<std::unique_ptr<Layer>> layers;
-    std::vector<std::string> classes;
+    Scheduler& scheduler;
+    FileSource& fileSource;
+    std::unique_ptr<SpriteLoader> spriteLoader;
+    std::string glyphURL;
+
+    Collection<style::Image> images;
+    Collection<Source> sources;
+    Collection<Layer> layers;
     TransitionOptions transitionOptions;
+    std::unique_ptr<Light> light;
 
     // Defaults
     std::string name;
@@ -122,44 +104,26 @@ private:
     double defaultBearing = 0;
     double defaultPitch = 0;
 
-    std::vector<std::unique_ptr<Layer>>::const_iterator findLayer(const std::string& layerID) const;
-    void reloadLayerSource(Layer&);
-    void updateSymbolDependentTiles();
-
-    // GlyphStoreObserver implementation.
-    void onGlyphsLoaded(const FontStack&, const GlyphRange&) override;
-    void onGlyphsError(const FontStack&, const GlyphRange&, std::exception_ptr) override;
-
-    // SpriteStoreObserver implementation.
-    void onSpriteLoaded() override;
+    // SpriteLoaderObserver implementation.
+    void onSpriteLoaded(std::vector<std::unique_ptr<Image>>&&) override;
     void onSpriteError(std::exception_ptr) override;
 
     // SourceObserver implementation.
     void onSourceLoaded(Source&) override;
-    void onSourceAttributionChanged(Source&, const std::string&) override;
+    void onSourceChanged(Source&) override;
     void onSourceError(Source&, std::exception_ptr) override;
     void onSourceDescriptionChanged(Source&) override;
-    void onTileChanged(Source&, const OverscaledTileID&) override;
-    void onTileError(Source&, const OverscaledTileID&, std::exception_ptr) override;
 
     // LayerObserver implementation.
-    void onLayerFilterChanged(Layer&) override;
-    void onLayerVisibilityChanged(Layer&) override;
-    void onLayerPaintPropertyChanged(Layer&) override;
-    void onLayerDataDrivenPaintPropertyChanged(Layer&) override;
-    void onLayerLayoutPropertyChanged(Layer&, const char *) override;
+    void onLayerChanged(Layer&) override;
+
+    // LightObserver implementation.
+    void onLightChanged(const Light&) override;
 
     Observer nullObserver;
     Observer* observer = &nullObserver;
 
     std::exception_ptr lastError;
-
-    UpdateBatch updateBatch;
-    ZoomHistory zoomHistory;
-    bool hasPendingTransitions = false;
-
-public:
-    bool loaded = false;
 };
 
 } // namespace style

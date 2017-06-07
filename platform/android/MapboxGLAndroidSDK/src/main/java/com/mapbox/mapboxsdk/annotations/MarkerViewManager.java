@@ -232,6 +232,7 @@ public class MarkerViewManager implements MapView.OnMapChangedListener {
     View convertView = markerViewMap.get(markerView);
     if (convertView != null && convertView instanceof ImageView) {
       ((ImageView) convertView).setImageBitmap(markerView.getIcon().getBitmap());
+      markerView.invalidate();
     }
   }
 
@@ -474,7 +475,6 @@ public class MarkerViewManager implements MapView.OnMapChangedListener {
           if (adapter.getMarkerClass().equals(marker.getClass())) {
             adapter.prepareViewForReuse(marker, convertView);
             adapter.releaseView(convertView);
-            marker.setMapboxMap(null);
             iterator.remove();
           }
         }
@@ -637,6 +637,7 @@ public class MarkerViewManager implements MapView.OnMapChangedListener {
         viewHolder = (ViewHolder) convertView.getTag();
       }
       viewHolder.imageView.setImageBitmap(marker.getIcon().getBitmap());
+      viewHolder.imageView.setContentDescription(marker.getTitle());
       return convertView;
     }
 

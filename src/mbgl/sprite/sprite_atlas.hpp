@@ -1,58 +1,70 @@
 #pragma once
 
-#include <mbgl/geometry/binpack.hpp>
 #include <mbgl/gl/texture.hpp>
 #include <mbgl/util/noncopyable.hpp>
 #include <mbgl/util/optional.hpp>
-#include <mbgl/sprite/sprite_image.hpp>
+#include <mbgl/util/rect.hpp>
+#include <mbgl/style/image.hpp>
 
-#include <atomic>
+#include <mapbox/shelf-pack.hpp>
+
 #include <string>
-#include <map>
-#include <mutex>
-#include <unordered_set>
+#include <set>
+#include <unordered_map>
 #include <array>
 #include <memory>
 
 namespace mbgl {
 
-class FileSource;
-class SpriteAtlasObserver;
-
 namespace gl {
 class Context;
 } // namespace gl
 
-class SpriteImage;
-class SpritePosition;
-
-class SpriteAtlasPosition {
-public:
-    std::array<float, 2> size = {{ 0, 0 }};
-    std::array<float, 2> tl = {{ 0, 0 }};
-    std::array<float, 2> br = {{ 0, 0 }};
-};
-
 class SpriteAtlasElement {
 public:
-    Rect<uint16_t> pos;
-    std::shared_ptr<const SpriteImage> spriteImage;
-    float relativePixelRatio;
+    SpriteAtlasElement(const mapbox::Bin&, const style::Image::Impl&);
+
+    bool sdf;
+    float pixelRatio;
+    Rect<uint16_t> textureRect;
+
+    std::array<uint16_t, 2> tl() const {
+        return {{
+            textureRect.x,
+            textureRect.y
+        }};
+    }
+
+    std::array<uint16_t, 2> br() const {
+        return {{
+            static_cast<uint16_t>(textureRect.x + textureRect.w),
+            static_cast<uint16_t>(textureRect.y + textureRect.h)
+        }};
+    }
+
+    std::array<float, 2> displaySize() const {
+        return {{
+            textureRect.w / pixelRatio,
+            textureRect.h / pixelRatio,
+        }};
+    }
 };
 
-enum class SpritePatternMode : bool {
-    Single = false,
-    Repeating = true,
+using IconMap = std::unordered_map<std::string, SpriteAtlasElement>;
+using IconDependencies = std::set<std::string>;
+
+class IconRequestor {
+public:
+    virtual ~IconRequestor() = default;
+    virtual void onIconsAvailable(IconMap) = 0;
 };
 
 class SpriteAtlas : public util::noncopyable {
 public:
-    using Sprites = std::map<std::string, std::shared_ptr<const SpriteImage>>;
-
-    SpriteAtlas(Size, float pixelRatio);
+    SpriteAtlas();
     ~SpriteAtlas();
 
-    void load(const std::string& url, FileSource&);
+    void onSpriteLoaded();
 
     bool isLoaded() const {
         return loaded;
@@ -60,40 +72,33 @@ public:
 
     void dumpDebugLogs() const;
 
-    void setObserver(SpriteAtlasObserver*);
+    const style::Image::Impl* getImage(const std::string&) const;
 
-    // Adds/replaces a Sprite image.
-    void setSprite(const std::string&, std::shared_ptr<const SpriteImage>);
+    void addImage(Immutable<style::Image::Impl>);
+    void updateImage(Immutable<style::Image::Impl>);
+    void removeImage(const std::string&);
 
-    // Adds/replaces mutliple Sprite images.
-    void setSprites(const Sprites& sprites);
+    void getIcons(IconRequestor&, IconDependencies);
+    void removeRequestor(IconRequestor&);
 
-    // Removes a Sprite.
-    void removeSprite(const std::string&);
+    // Ensure that the atlas contains the named image suitable for rendering as an icon, and
+    // return its metrics. The image will be padded on each side with a one pixel wide transparent
+    // strip, but the returned metrics are exclusive of this padding.
+    optional<SpriteAtlasElement> getIcon(const std::string& name);
 
-    // Obtains a Sprite image.
-    std::shared_ptr<const SpriteImage> getSprite(const std::string&);
-
-    // If the sprite is loaded, copies the requsted image from it into the atlas and returns
-    // the resulting icon measurements. If not, returns an empty optional.
-    optional<SpriteAtlasElement> getImage(const std::string& name, SpritePatternMode mode);
-
-    // This function is used for getting the position during render time.
-    optional<SpriteAtlasPosition> getPosition(const std::string& name,
-                                              SpritePatternMode mode = SpritePatternMode::Single);
+    // Ensure that the atlas contains the named image suitable for rendering as an pattern, and
+    // return its metrics. The image will be padded on each side with a one pixel wide copy of
+    // pixels from the opposite side, but the returned metrics are exclusive of this padding.
+    optional<SpriteAtlasElement> getPattern(const std::string& name);
 
     // Binds the atlas texture to the GPU, and uploads data if it is out of date.
     void bind(bool linear, gl::Context&, gl::TextureUnit unit);
-
-    // Updates sprites in the atlas texture that may have changed.
-    void updateDirty();
 
     // Uploads the texture to the GPU to be available when we need it. This is a lazy operation;
     // the texture is only bound when the data is out of date (=dirty).
     void upload(gl::Context&, gl::TextureUnit unit);
 
-    Size getSize() const { return size; }
-    float getPixelRatio() const { return pixelRatio; }
+    Size getPixelSize() const;
 
     // Only for use in tests.
     const PremultipliedImage& getAtlasImage() const {
@@ -101,48 +106,32 @@ public:
     }
 
 private:
-    void _setSprite(const std::string&, const std::shared_ptr<const SpriteImage>& = nullptr);
-    void emitSpriteLoadedIfComplete();
-
-    const Size size;
-    const float pixelRatio;
-
-    struct Loader;
-    std::unique_ptr<Loader> loader;
-
     bool loaded = false;
 
-    SpriteAtlasObserver* observer = nullptr;
+    struct Entry {
+        Immutable<style::Image::Impl> image;
 
-    // Lock for sprites and dirty maps.
-    std::mutex mutex;
-
-    // Stores all current sprites.
-    Sprites sprites;
-
-    // Stores all Sprite IDs that changed since the last invocation.
-    Sprites dirtySprites;
-
-    struct Holder : private util::noncopyable {
-        Holder(std::shared_ptr<const SpriteImage>, Rect<uint16_t>);
-        Holder(Holder&&);
-        std::shared_ptr<const SpriteImage> spriteImage;
-        const Rect<uint16_t> pos;
+        // One sprite image might be used as both an icon image and a pattern image. If so,
+        // it must have two distinct entries in the texture. The one for the icon image has
+        // a single pixel transparent border, and the one for the pattern image has a single
+        // pixel border wrapped from the opposite side.
+        mapbox::Bin* iconBin = nullptr;
+        mapbox::Bin* patternBin = nullptr;
     };
 
-    using Key = std::pair<std::string, SpritePatternMode>;
+    optional<SpriteAtlasElement> getImage(const std::string& name, mapbox::Bin* Entry::*bin);
+    void copy(const Entry&, mapbox::Bin* Entry::*bin);
+    
+    IconMap buildIconMap();
 
-    Rect<uint16_t> allocateImage(const SpriteImage&);
-    void copy(const Holder& holder, SpritePatternMode mode);
-
-    std::recursive_mutex mtx;
-    BinPack<uint16_t> bin;
-    std::map<Key, Holder> images;
-    std::unordered_set<std::string> uninitialized;
+    std::unordered_map<std::string, Entry> entries;
+    mapbox::ShelfPack shelfPack;
     PremultipliedImage image;
     mbgl::optional<gl::Texture> texture;
-    std::atomic<bool> dirty;
-    static const int buffer = 1;
+    bool dirty = true;
+    
+    std::set<IconRequestor*> requestors;
+    IconMap icons;
 };
 
 } // namespace mbgl

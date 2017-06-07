@@ -25,10 +25,10 @@ public:
 
     T evaluate(float zoom) const {
         return stops.match([&] (const auto& s) {
-            return s.evaluate(Value(double(zoom))).value_or(T());
+            return s.evaluate(zoom).value_or(T());
         });
     }
-
+    
     friend bool operator==(const CameraFunction& lhs,
                            const CameraFunction& rhs) {
         return lhs.stops == rhs.stops;

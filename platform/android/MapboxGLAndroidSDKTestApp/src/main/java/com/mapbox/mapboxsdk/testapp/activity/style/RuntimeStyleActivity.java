@@ -17,13 +17,15 @@ import com.mapbox.mapboxsdk.maps.OnMapReadyCallback;
 import com.mapbox.mapboxsdk.style.functions.Function;
 import com.mapbox.mapboxsdk.style.functions.stops.ExponentialStops;
 import com.mapbox.mapboxsdk.style.functions.stops.Stop;
+import com.mapbox.mapboxsdk.style.layers.CircleLayer;
 import com.mapbox.mapboxsdk.style.layers.FillLayer;
 import com.mapbox.mapboxsdk.style.layers.Layer;
 import com.mapbox.mapboxsdk.style.layers.LineLayer;
-import com.mapbox.mapboxsdk.style.layers.NoSuchLayerException;
 import com.mapbox.mapboxsdk.style.layers.Property;
 import com.mapbox.mapboxsdk.style.layers.PropertyValue;
 import com.mapbox.mapboxsdk.style.layers.RasterLayer;
+import com.mapbox.mapboxsdk.style.layers.SymbolLayer;
+import com.mapbox.mapboxsdk.style.layers.TransitionOptions;
 import com.mapbox.mapboxsdk.style.sources.GeoJsonSource;
 import com.mapbox.mapboxsdk.style.sources.RasterSource;
 import com.mapbox.mapboxsdk.style.sources.Source;
@@ -41,6 +43,7 @@ import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import timber.log.Timber;
@@ -71,7 +74,7 @@ import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.symbolPlacement;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.visibility;
 
 /**
- * Sample Activity to show off the runtime style api
+ * Test activity showcasing the runtime style API.
  */
 public class RuntimeStyleActivity extends AppCompatActivity {
 
@@ -96,6 +99,9 @@ public class RuntimeStyleActivity extends AppCompatActivity {
 
         // Center and Zoom (Amsterdam, zoomed to streets)
         mapboxMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(52.379189, 4.899431), 14));
+
+        mapboxMap.setTransitionDuration(250);
+        mapboxMap.setTransitionDelay(50);
       }
     });
   }
@@ -151,6 +157,12 @@ public class RuntimeStyleActivity extends AppCompatActivity {
   @Override
   public boolean onOptionsItemSelected(MenuItem item) {
     switch (item.getItemId()) {
+      case R.id.action_list_layers:
+        listLayers();
+        return true;
+      case R.id.action_list_sources:
+        listSources();
+        return true;
       case R.id.action_water_color:
         setWaterColor();
         return true;
@@ -198,6 +210,26 @@ public class RuntimeStyleActivity extends AppCompatActivity {
     }
   }
 
+  private void listLayers() {
+    List<Layer> layers = mapboxMap.getLayers();
+    StringBuilder builder = new StringBuilder("Layers:");
+    for (Layer layer : layers) {
+      builder.append("\n");
+      builder.append(layer.getId());
+    }
+    Toast.makeText(this, builder.toString(), Toast.LENGTH_LONG).show();
+  }
+
+  private void listSources() {
+    List<Source> sources = mapboxMap.getSources();
+    StringBuilder builder = new StringBuilder("Sources:");
+    for (Source source : sources) {
+      builder.append("\n");
+      builder.append(source.getId());
+    }
+    Toast.makeText(this, builder.toString(), Toast.LENGTH_LONG).show();
+  }
+
   private void setLayerInvisible() {
     String[] roadLayers = new String[] {"water"};
     for (String roadLayer : roadLayers) {
@@ -232,10 +264,9 @@ public class RuntimeStyleActivity extends AppCompatActivity {
   }
 
   private void setWaterColor() {
-    Layer water = mapboxMap.getLayer("water");
+    FillLayer water = mapboxMap.getLayerAs("water");
     if (water != null) {
-      mapboxMap.setTransitionDuration(5);
-      mapboxMap.setTransitionDelay(1);
+      water.setFillColorTransition(new TransitionOptions(7500, 1000));
       water.setProperties(
         visibility(VISIBLE),
         fillColor(Color.RED)
@@ -247,11 +278,7 @@ public class RuntimeStyleActivity extends AppCompatActivity {
 
   private void removeBuildings() {
     // Zoom to see buildings first
-    try {
-      mapboxMap.removeLayer("building");
-    } catch (NoSuchLayerException noSuchLayerException) {
-      Toast.makeText(RuntimeStyleActivity.this, noSuchLayerException.getMessage(), Toast.LENGTH_SHORT).show();
-    }
+    mapboxMap.removeLayer("building");
   }
 
   private void addParksLayer() {
@@ -280,7 +307,7 @@ public class RuntimeStyleActivity extends AppCompatActivity {
     // Only show me parks (except westerpark with stroke-width == 3)
     layer.setFilter(all(eq("type", "park"), eq("stroke-width", 2)));
 
-    mapboxMap.addLayer(layer, "building");
+    mapboxMap.addLayerBelow(layer, "building");
     // layer.setPaintProperty(fillColor(Color.RED)); // XXX But not after the object is attached
 
     // Or get the object later and set it. It's all good.
@@ -384,7 +411,25 @@ public class RuntimeStyleActivity extends AppCompatActivity {
       lineWidth(20f)
     );
 
-    mapboxMap.addLayer(layer);
+    // adding layers below "road" layers
+    List<Layer> layers = mapboxMap.getLayers();
+    Layer latestLayer = null;
+    Collections.reverse(layers);
+    for (Layer currentLayer : layers) {
+      if (currentLayer instanceof FillLayer && ((FillLayer) currentLayer).getSourceLayer().equals("road")) {
+        latestLayer = currentLayer;
+      } else if (currentLayer instanceof CircleLayer && ((CircleLayer) currentLayer).getSourceLayer().equals("road")) {
+        latestLayer = currentLayer;
+      } else if (currentLayer instanceof SymbolLayer && ((SymbolLayer) currentLayer).getSourceLayer().equals("road")) {
+        latestLayer = currentLayer;
+      } else if (currentLayer instanceof LineLayer && ((LineLayer) currentLayer).getSourceLayer().equals("road")) {
+        latestLayer = currentLayer;
+      }
+    }
+
+    if (latestLayer != null) {
+      mapboxMap.addLayerBelow(layer, latestLayer.getId());
+    }
 
     // Need to get a fresh handle
     layer = mapboxMap.getLayerAs("terrainLayer");
@@ -489,7 +534,8 @@ public class RuntimeStyleActivity extends AppCompatActivity {
 
         if (states != null) {
           states.setFilter(eq("name", "Texas"));
-
+          states.setFillOpacityTransition(new TransitionOptions(2500, 0));
+          states.setFillColorTransition(new TransitionOptions(2500, 0));
           states.setProperties(
             fillColor(Color.RED),
             fillOpacity(0.25f)
