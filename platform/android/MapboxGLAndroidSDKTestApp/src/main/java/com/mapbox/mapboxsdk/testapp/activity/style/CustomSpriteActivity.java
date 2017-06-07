@@ -27,7 +27,7 @@ import timber.log.Timber;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.iconImage;
 
 /**
- * Example to add a sprite image and use it in a Symbol Layer
+ * Test activity showcasing adding a sprite image and use it in a Symbol Layer
  */
 public class CustomSpriteActivity extends AppCompatActivity {
   private static final String CUSTOM_ICON = "custom-icon";
@@ -77,7 +77,7 @@ public class CustomSpriteActivity extends AppCompatActivity {
               );
 
               // lets add a circle below labels!
-              mapboxMap.addLayer(layer, "waterway-label");
+              mapboxMap.addLayerBelow(layer, "waterway-label");
 
               fab.setImageResource(R.drawable.ic_directions_car_black);
             } else {

@@ -58,6 +58,7 @@ public class MyLocationView extends View {
 
   private LatLng latLng;
   private Location location;
+  private LocationEngine locationSource;
   private long locationUpdateTimestamp;
   private float previousDirection;
 
@@ -257,9 +258,7 @@ public class MyLocationView extends View {
 
     final PointF pointF = screenLocation;
     float metersPerPixel = (float) projection.getMetersPerPixelAtLatitude(location.getLatitude());
-    float accuracyPixels = (Float) accuracyAnimator.getAnimatedValue() / metersPerPixel / 2;
-    float maxRadius = getWidth() / 2;
-    accuracyPixels = accuracyPixels <= maxRadius ? accuracyPixels : maxRadius;
+    float accuracyPixels = (Float) accuracyAnimator.getAnimatedValue() / metersPerPixel;
 
     // reset
     matrix.reset();
@@ -298,7 +297,7 @@ public class MyLocationView extends View {
     }
 
     // draw foreground
-    if (myBearingTrackingMode == MyBearingTracking.NONE) {
+    if (myBearingTrackingMode == MyBearingTracking.NONE || !compassListener.isSensorAvailable()) {
       if (foregroundDrawable != null) {
         foregroundDrawable.draw(canvas);
       }
@@ -322,7 +321,7 @@ public class MyLocationView extends View {
         if (location != null) {
           setCompass(location.getBearing() - bearing);
         }
-      } else if (myBearingTrackingMode == MyBearingTracking.COMPASS) {
+      } else if (myBearingTrackingMode == MyBearingTracking.COMPASS && compassListener.isSensorAvailable()) {
         setCompass(magneticHeading - bearing);
       }
     }
@@ -336,7 +335,7 @@ public class MyLocationView extends View {
   }
 
   public void onStart() {
-    if (myBearingTrackingMode == MyBearingTracking.COMPASS) {
+    if (myBearingTrackingMode == MyBearingTracking.COMPASS && compassListener.isSensorAvailable()) {
       compassListener.onResume();
     }
     if (isEnabled()) {
@@ -369,7 +368,8 @@ public class MyLocationView extends View {
     }
 
     if (userLocationListener != null) {
-      LocationSource.getLocationEngine(getContext()).removeLocationEngineListener(userLocationListener);
+      locationSource.removeLocationEngineListener(userLocationListener);
+      locationSource = null;
       userLocationListener = null;
     }
   }
@@ -419,27 +419,33 @@ public class MyLocationView extends View {
    * @param enableGps true if GPS is to be enabled, false if GPS is to be disabled
    */
   private void toggleGps(boolean enableGps) {
-    LocationEngine locationEngine = LocationSource.getLocationEngine(getContext());
+    if (locationSource == null) {
+      locationSource = LocationSource.getLocationEngine(this.getContext());
+    }
+
     if (enableGps) {
       // Set an initial location if one available
-      Location lastLocation = locationEngine.getLastLocation();
+      Location lastLocation = locationSource.getLastLocation();
 
       if (lastLocation != null) {
         setLocation(lastLocation);
       }
 
       if (userLocationListener == null) {
-        userLocationListener = new GpsLocationListener(this);
+        userLocationListener = new GpsLocationListener(this, locationSource);
       }
 
-      locationEngine.addLocationEngineListener(userLocationListener);
+      locationSource.addLocationEngineListener(userLocationListener);
+      locationSource.activate();
     } else {
       // Disable location and user dot
       location = null;
-      locationEngine.removeLocationEngineListener(userLocationListener);
+      locationSource.removeLocationUpdates();
+      locationSource.removeLocationEngineListener(userLocationListener);
+      locationSource.deactivate();
     }
 
-    locationEngine.setPriority(LocationEnginePriority.HIGH_ACCURACY);
+    locationSource.setPriority(LocationEnginePriority.HIGH_ACCURACY);
   }
 
   public Location getLocation() {
@@ -458,7 +464,7 @@ public class MyLocationView extends View {
 
   public void setMyBearingTrackingMode(@MyBearingTracking.Mode int myBearingTrackingMode) {
     this.myBearingTrackingMode = myBearingTrackingMode;
-    if (myBearingTrackingMode == MyBearingTracking.COMPASS) {
+    if (myBearingTrackingMode == MyBearingTracking.COMPASS && compassListener.isSensorAvailable()) {
       compassListener.onResume();
     } else {
       compassListener.onPause();
@@ -479,19 +485,8 @@ public class MyLocationView extends View {
     if (location != null) {
       if (myLocationTrackingMode == MyLocationTracking.TRACKING_FOLLOW) {
         // center map directly
-        mapboxMap.getTrackingSettings().setDismissTrackingModeForCameraPositionChange(false);
         mapboxMap.easeCamera(CameraUpdateFactory.newLatLng(new LatLng(location)), 0, false /*linear interpolator*/,
-          new MapboxMap.CancelableCallback() {
-            @Override
-            public void onCancel() {
-
-            }
-
-            @Override
-            public void onFinish() {
-              mapboxMap.getTrackingSettings().setDismissTrackingModeForCameraPositionChange(true);
-            }
-          });
+          null, true);
       } else {
         // do not use interpolated location from tracking mode
         latLng = null;
@@ -558,20 +553,28 @@ public class MyLocationView extends View {
     contentPaddingY = (padding[1] - padding[3]) / 2;
   }
 
+  public void setLocationSource(LocationEngine locationSource) {
+    this.locationSource = locationSource;
+  }
+
   private static class GpsLocationListener implements LocationEngineListener {
 
     private WeakReference<MyLocationView> userLocationView;
+    private WeakReference<LocationEngine> locationSource;
 
-    GpsLocationListener(MyLocationView myLocationView) {
+    GpsLocationListener(MyLocationView myLocationView, LocationEngine locationEngine) {
       userLocationView = new WeakReference<>(myLocationView);
+      locationSource = new WeakReference<>(locationEngine);
     }
 
     @Override
     public void onConnected() {
       MyLocationView locationView = userLocationView.get();
       if (locationView != null) {
-        Location location = LocationSource.getLocationEngine(locationView.getContext()).getLastLocation();
+        LocationEngine locationEngine = locationSource.get();
+        Location location = locationEngine.getLastLocation();
         locationView.setLocation(location);
+        locationEngine.requestLocationUpdates();
       }
     }
 
@@ -613,6 +616,10 @@ public class MyLocationView extends View {
       sensorManager.unregisterListener(this, rotationVectorSensor);
     }
 
+    public boolean isSensorAvailable() {
+      return rotationVectorSensor != null;
+    }
+
     @Override
     public void onSensorChanged(SensorEvent event) {
 
@@ -645,19 +652,8 @@ public class MyLocationView extends View {
     private void rotateCamera(float rotation) {
       CameraPosition.Builder builder = new CameraPosition.Builder();
       builder.bearing(rotation);
-      mapboxMap.getTrackingSettings().setDismissTrackingModeForCameraPositionChange(false);
       mapboxMap.easeCamera(CameraUpdateFactory.newCameraPosition(builder.build()), COMPASS_UPDATE_RATE_MS,
-        false /*linear interpolator*/, new MapboxMap.CancelableCallback() {
-          @Override
-          public void onCancel() {
-
-          }
-
-          @Override
-          public void onFinish() {
-            mapboxMap.getTrackingSettings().setDismissTrackingModeForCameraPositionChange(true);
-          }
-        });
+        false /*linear interpolator*/, null);
     }
 
     @Override
@@ -723,7 +719,7 @@ public class MyLocationView extends View {
         accuracyAnimator.end();
       }
 
-      accuracyAnimator = ValueAnimator.ofFloat(accuracy * 10, location.getAccuracy() * 10);
+      accuracyAnimator = ValueAnimator.ofFloat(accuracy, location.getAccuracy());
       accuracyAnimator.setDuration(750);
       accuracyAnimator.start();
       accuracy = location.getAccuracy();
@@ -748,11 +744,11 @@ public class MyLocationView extends View {
       locationUpdateTimestamp = SystemClock.elapsedRealtime();
 
       // calculate animation duration
-      float animationDuration;
+      int animationDuration;
       if (previousUpdateTimeStamp == 0) {
         animationDuration = 0;
       } else {
-        animationDuration = (locationUpdateTimestamp - previousUpdateTimeStamp) * 1.1f
+        animationDuration = (int) ((locationUpdateTimestamp - previousUpdateTimeStamp) * 1.1f)
         /*make animation slightly longer*/;
       }
 
@@ -771,20 +767,9 @@ public class MyLocationView extends View {
       // accuracy
       updateAccuracy(location);
 
-      mapboxMap.getTrackingSettings().setDismissTrackingModeForCameraPositionChange(false);
       // ease to new camera position with a linear interpolator
-      mapboxMap.easeCamera(CameraUpdateFactory.newCameraPosition(builder.build()), (int) animationDuration,
-        false /*linear interpolator*/, new MapboxMap.CancelableCallback() {
-          @Override
-          public void onCancel() {
-
-          }
-
-          @Override
-          public void onFinish() {
-            mapboxMap.getTrackingSettings().setDismissTrackingModeForCameraPositionChange(true);
-          }
-        });
+      mapboxMap.easeCamera(CameraUpdateFactory.newCameraPosition(builder.build()), animationDuration, false, null,
+        true);
     }
 
     @Override

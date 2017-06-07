@@ -7,15 +7,12 @@
 namespace mbgl {
 
 class AnnotationManager;
-
-namespace style {
-class UpdateParameters;
-} // namespace style
+class TileParameters;
 
 class AnnotationTile : public GeometryTile {
 public:
     AnnotationTile(const OverscaledTileID&,
-                   const style::UpdateParameters&);
+                   const TileParameters&);
     ~AnnotationTile() override;
 
     void setNecessity(Necessity) final;
@@ -45,7 +42,11 @@ public:
     AnnotationTileLayer(std::string);
 
     std::size_t featureCount() const override { return features.size(); }
-    std::unique_ptr<GeometryTileFeature> getFeature(std::size_t i) const override { return std::make_unique<AnnotationTileFeature>(features[i]); }
+
+    std::unique_ptr<GeometryTileFeature> getFeature(std::size_t i) const override {
+        return std::make_unique<AnnotationTileFeature>(features.at(i));
+    }
+
     std::string getName() const override { return name; };
 
     std::vector<AnnotationTileFeature> features;

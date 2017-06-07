@@ -12,6 +12,7 @@ import com.mapbox.mapboxsdk.constants.MyBearingTracking;
 import com.mapbox.mapboxsdk.constants.MyLocationTracking;
 import com.mapbox.mapboxsdk.location.LocationSource;
 import com.mapbox.mapboxsdk.maps.widgets.MyLocationView;
+import com.mapbox.services.android.telemetry.location.LocationEngine;
 import com.mapbox.services.android.telemetry.location.LocationEngineListener;
 import com.mapbox.services.android.telemetry.permissions.PermissionsManager;
 
@@ -26,12 +27,12 @@ public final class TrackingSettings {
   private final UiSettings uiSettings;
   private final FocalPointChangeListener focalPointChangedListener;
   private final CameraZoomInvalidator zoomInvalidator;
+  private LocationEngine locationSource;
   private LocationEngineListener myLocationListener;
 
   private boolean myLocationEnabled;
   private boolean dismissLocationTrackingOnGesture = true;
   private boolean dismissBearingTrackingOnGesture = true;
-  private boolean isResetTrackingWithCameraPositionChange = true;
 
   private MapboxMap.OnMyLocationTrackingModeChangeListener onMyLocationTrackingModeChangeListener;
   private MapboxMap.OnMyBearingTrackingModeChangeListener onMyBearingTrackingModeChangeListener;
@@ -45,6 +46,7 @@ public final class TrackingSettings {
   }
 
   void initialise(MapboxMapOptions options) {
+    locationSource = LocationSource.getLocationEngine(myLocationView.getContext());
     setMyLocationEnabled(options.getLocationEnabled());
   }
 
@@ -54,8 +56,6 @@ public final class TrackingSettings {
     outState.putBoolean(MapboxConstants.STATE_MY_LOCATION_TRACKING_DISMISS, isDismissLocationTrackingOnGesture());
     outState.putBoolean(MapboxConstants.STATE_MY_BEARING_TRACKING_DISMISS, isDismissBearingTrackingOnGesture());
     outState.putBoolean(MapboxConstants.STATE_MY_LOCATION_ENABLED, isMyLocationEnabled());
-    outState.putBoolean(MapboxConstants.STATE_MY_TRACKING_MODE_DISMISS_FOR_CAMERA,
-      isDismissTrackingModesForCameraPositionChange());
   }
 
   void onRestoreInstanceState(Bundle savedInstanceState) {
@@ -74,8 +74,6 @@ public final class TrackingSettings {
       MapboxConstants.STATE_MY_LOCATION_TRACKING_DISMISS, true));
     setDismissBearingTrackingOnGesture(savedInstanceState.getBoolean(
       MapboxConstants.STATE_MY_BEARING_TRACKING_DISMISS, true));
-    setDismissTrackingModeForCameraPositionChange(savedInstanceState.getBoolean(
-      MapboxConstants.STATE_MY_TRACKING_MODE_DISMISS_FOR_CAMERA, true));
   }
 
   /**
@@ -256,15 +254,16 @@ public final class TrackingSettings {
   }
 
   /**
-   * Reset the tracking modes as necessary. Location tracking is reset if the map center is changed,
-   * bearing tracking if there is a rotation.
+   * Reset the tracking modes as necessary. Location tracking is reset if the map center is changed and not from
+   * location, bearing tracking if there is a rotation.
    *
-   * @param translate true if translation
-   * @param rotate    true if rotation
+   * @param translate      true if translation
+   * @param rotate         true if rotation
+   * @param isFromLocation true if from location
    */
-  void resetTrackingModesIfRequired(boolean translate, boolean rotate) {
+  void resetTrackingModesIfRequired(boolean translate, boolean rotate, boolean isFromLocation) {
     // if tracking is on, and we should dismiss tracking with gestures, and this is a scroll action, turn tracking off
-    if (translate && !isLocationTrackingDisabled() && isDismissLocationTrackingOnGesture()) {
+    if (translate && !isLocationTrackingDisabled() && isDismissLocationTrackingOnGesture() && !isFromLocation) {
       setMyLocationTrackingMode(MyLocationTracking.TRACKING_NONE);
     }
 
@@ -277,36 +276,16 @@ public final class TrackingSettings {
   /**
    * Reset the tracking modes as necessary. Animated camera position changes can reset the underlying tracking modes.
    *
-   * @param cameraPosition the changed camera position
+   * @param currentCameraPosition the current camera position
+   * @param targetCameraPosition  the changed camera position
+   * @param isFromLocation        true if from location
    */
-  void resetTrackingModesIfRequired(CameraPosition cameraPosition) {
-    if (isDismissTrackingModesForCameraPositionChange()) {
-      resetTrackingModesIfRequired(cameraPosition.target != null, cameraPosition.bearing != -1);
+  void resetTrackingModesIfRequired(CameraPosition currentCameraPosition, CameraPosition targetCameraPosition,
+                                    boolean isFromLocation) {
+    if (currentCameraPosition.target != null) {
+      resetTrackingModesIfRequired(!currentCameraPosition.target.equals(targetCameraPosition.target), false,
+        isFromLocation);
     }
-  }
-
-  /**
-   * Returns if a animation allows to dismiss a tracking mode.
-   * <p>
-   * By default this is set to true.
-   * </p>
-   *
-   * @return True if camera animations will allow to dismiss a tracking mode
-   */
-  public boolean isDismissTrackingModesForCameraPositionChange() {
-    return isResetTrackingWithCameraPositionChange;
-  }
-
-  /**
-   * Sets a flag to allow animated camera position changes to dismiss a tracking mode.
-   * <p>
-   * <p>
-   * </p>
-   *
-   * @param willAllowToDismiss True will allow animated camera changes dismiss a trackig mode
-   */
-  public void setDismissTrackingModeForCameraPositionChange(boolean willAllowToDismiss) {
-    isResetTrackingWithCameraPositionChange = willAllowToDismiss;
   }
 
   Location getMyLocation() {
@@ -328,9 +307,9 @@ public final class TrackingSettings {
           }
         }
       };
-      LocationSource.getLocationEngine(myLocationView.getContext()).addLocationEngineListener(myLocationListener);
+      locationSource.addLocationEngineListener(myLocationListener);
     } else {
-      LocationSource.getLocationEngine(myLocationView.getContext()).removeLocationEngineListener(myLocationListener);
+      locationSource.removeLocationEngineListener(myLocationListener);
       myLocationListener = null;
     }
   }
@@ -360,6 +339,11 @@ public final class TrackingSettings {
     }
     myLocationEnabled = locationEnabled;
     myLocationView.setEnabled(locationEnabled);
+  }
+
+  void setLocationSource(LocationEngine locationSource) {
+    this.locationSource = locationSource;
+    myLocationView.setLocationSource(locationSource);
   }
 
   void update() {

@@ -86,6 +86,50 @@ TEST(Image, WebPTile) {
 }
 #endif // !defined(__ANDROID__) && !defined(__APPLE__) && !defined(QT_IMAGE_DECODERS)
 
+TEST(Image, Copy) {
+    PremultipliedImage src5({5, 5});
+    PremultipliedImage dst5({5, 5});
+    PremultipliedImage src10({10, 10});
+    PremultipliedImage dst10({10, 10});
+
+    EXPECT_THROW(PremultipliedImage::copy(src5, dst10, {0, 0}, {0, 0}, {6, 0}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src5, dst10, {0, 0}, {0, 0}, {0, 6}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src5, dst10, {1, 1}, {0, 0}, {5, 0}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src5, dst10, {1, 1}, {0, 0}, {0, 5}), std::out_of_range);
+
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst5, {0, 0}, {0, 0}, {6, 0}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst5, {0, 0}, {0, 0}, {0, 6}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst5, {0, 0}, {1, 1}, {5, 0}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst5, {0, 0}, {1, 1}, {0, 5}), std::out_of_range);
+
+    const uint32_t max = std::numeric_limits<uint32_t>::max();
+
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst10, {max, 0}, {0, 0}, {1, 0}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst10, {0, max}, {0, 0}, {0, 1}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst10, {0, 0}, {max, 0}, {1, 0}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst10, {0, 0}, {0, max}, {0, 1}), std::out_of_range);
+
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst10, {1, 0}, {0, 0}, {max, 0}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst10, {0, 1}, {0, 0}, {0, max}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst10, {0, 0}, {1, 0}, {max, 0}), std::out_of_range);
+    EXPECT_THROW(PremultipliedImage::copy(src10, dst10, {0, 0}, {0, 1}, {0, max}), std::out_of_range);
+}
+
+TEST(Image, Move) {
+    UnassociatedImage rgba({ 1, 1 });
+    rgba.data[0] = 255;
+    rgba.data[1] = 254;
+    rgba.data[2] = 253;
+    rgba.data[3] = 128;
+
+    auto moved = std::move(rgba);
+
+    EXPECT_EQ(0u, rgba.size.width);
+    EXPECT_EQ(nullptr, rgba.data.get());
+    EXPECT_EQ(254, moved.data[1]);
+    EXPECT_EQ(1u, moved.size.width);
+}
+
 TEST(Image, Premultiply) {
     UnassociatedImage rgba({ 1, 1 });
     rgba.data[0] = 255;
@@ -98,4 +142,8 @@ TEST(Image, Premultiply) {
     EXPECT_EQ(127, image.data[1]);
     EXPECT_EQ(127, image.data[2]);
     EXPECT_EQ(128, image.data[3]);
+    EXPECT_EQ(1u, image.size.width);
+    EXPECT_EQ(1u, image.size.height);
+    EXPECT_EQ(0u, rgba.size.width);
+    EXPECT_EQ(0u, rgba.size.height);
 }

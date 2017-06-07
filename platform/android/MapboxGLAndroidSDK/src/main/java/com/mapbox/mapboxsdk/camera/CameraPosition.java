@@ -156,7 +156,7 @@ public final class CameraPosition implements Parcelable {
   }
 
   /**
-   * Builder for composing {@link CameraPosition} objects.
+   * Builder for composing CameraPosition objects.
    */
   public static final class Builder {
 
@@ -190,7 +190,7 @@ public final class CameraPosition implements Parcelable {
     /**
      * Create Builder with an existing CameraPosition data.
      *
-     * @param typedArray TypedArray containgin attribute values
+     * @param typedArray TypedArray containing attribute values
      */
     public Builder(TypedArray typedArray) {
       super();
@@ -228,24 +228,6 @@ public final class CameraPosition implements Parcelable {
       super();
       if (update != null) {
         this.zoom = update.getZoom();
-      }
-    }
-
-    /**
-     * Create Builder from an existing array of doubles.
-     * <p>
-     * These values conform to map.ccp representation of a camera position.
-     * </p>
-     *
-     * @param nativeCameraValues Values containing target, bearing, tilt and zoom
-     */
-    public Builder(double[] nativeCameraValues) {
-      super();
-      if (nativeCameraValues != null && nativeCameraValues.length == 5) {
-        target(new LatLng(nativeCameraValues[0], nativeCameraValues[1]).wrap());
-        bearing(MathUtils.convertNativeBearing(nativeCameraValues[2]));
-        tilt(nativeCameraValues[3]);
-        zoom(nativeCameraValues[4]);
       }
     }
 
@@ -293,7 +275,7 @@ public final class CameraPosition implements Parcelable {
      * Set the tilt in degrees
      * <p>
      * value is clamped to 0 and 60.
-     * <p/>
+     * </p>
      *
      * @param tilt Tilt value
      * @return Builder

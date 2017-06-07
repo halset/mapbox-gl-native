@@ -22,6 +22,7 @@ import com.mapbox.mapboxsdk.style.layers.LineLayer;
 import com.mapbox.mapboxsdk.testapp.R;
 import com.mapbox.mapboxsdk.testapp.activity.style.RuntimeStyleTestActivity;
 import com.mapbox.mapboxsdk.testapp.utils.OnMapReadyIdlingResource;
+import com.mapbox.mapboxsdk.testapp.activity.BaseActivityTest;
 
 import org.junit.After;
 import org.junit.Before;
@@ -36,27 +37,23 @@ import static org.junit.Assert.*;
 import static com.mapbox.mapboxsdk.style.layers.Property.*;
 import static com.mapbox.mapboxsdk.style.layers.PropertyFactory.*;
 
+import com.mapbox.mapboxsdk.style.layers.TransitionOptions;
+import com.mapbox.mapboxsdk.testapp.activity.espresso.EspressoTestActivity;
+
 /**
  * Basic smoke tests for LineLayer
  */
 @RunWith(AndroidJUnit4.class)
-public class LineLayerTest extends BaseStyleTest {
-
-  @Rule
-  public final ActivityTestRule<RuntimeStyleTestActivity> rule = new ActivityTestRule<>(RuntimeStyleTestActivity.class);
+public class LineLayerTest extends BaseActivityTest {
 
   private LineLayer layer;
 
-  private OnMapReadyIdlingResource idlingResource;
+  @Override
+  protected Class getActivityClass() {
+    return EspressoTestActivity.class;
+  }
 
-  private MapboxMap mapboxMap;
-
-  @Before
-  public void setup() {
-    idlingResource = new OnMapReadyIdlingResource(rule.getActivity());
-    Espresso.registerIdlingResources(idlingResource);
-    mapboxMap = rule.getActivity().getMapboxMap();
-
+  private void setupLayer(){
     if ((layer = mapboxMap.getLayerAs("my-layer")) == null) {
       Timber.i("Adding layer");
       layer = new LineLayer("my-layer", "composite");
@@ -69,7 +66,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testSetVisibility() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("Visibility");
     assertNotNull(layer);
 
@@ -82,8 +80,25 @@ public class LineLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testSourceLayer() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("SourceLayer");
+    assertNotNull(layer);
+
+    // Get initial
+    assertEquals(layer.getSourceLayer(), "composite");
+
+    // Set
+    final String sourceLayer = "test";
+    layer.setSourceLayer(sourceLayer);
+    assertEquals(layer.getSourceLayer(), sourceLayer);
+  }
+
+  @Test
   public void testLineCapAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-cap");
     assertNotNull(layer);
 
@@ -94,7 +109,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineCapAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-cap");
     assertNotNull(layer);
 
@@ -119,7 +135,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineJoinAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-join");
     assertNotNull(layer);
 
@@ -130,7 +147,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineJoinAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-join");
     assertNotNull(layer);
 
@@ -155,7 +173,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineMiterLimitAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-miter-limit");
     assertNotNull(layer);
 
@@ -166,7 +185,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineMiterLimitAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-miter-limit");
     assertNotNull(layer);
 
@@ -192,7 +212,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineRoundLimitAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-round-limit");
     assertNotNull(layer);
 
@@ -203,7 +224,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineRoundLimitAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-round-limit");
     assertNotNull(layer);
 
@@ -228,8 +250,22 @@ public class LineLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testLineOpacityTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("line-opacityTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setLineOpacityTransition(options);
+    assertEquals(layer.getLineOpacityTransition(), options);
+  }
+
+  @Test
   public void testLineOpacityAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-opacity");
     assertNotNull(layer);
 
@@ -240,7 +276,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineOpacityAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-opacity");
     assertNotNull(layer);
 
@@ -266,7 +303,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineOpacityAsIdentitySourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-opacity");
     assertNotNull(layer);
 
@@ -285,7 +323,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineOpacityAsExponentialSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-opacity");
     assertNotNull(layer);
 
@@ -311,7 +350,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineOpacityAsCategoricalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-opacity");
     assertNotNull(layer);
 
@@ -323,7 +363,7 @@ public class LineLayerTest extends BaseStyleTest {
           categorical(
             stop(1.0f, lineOpacity(0.3f))
           )
-        ).withDefaultValue(0.3f)
+        ).withDefaultValue(lineOpacity(0.3f))
       )
     );
 
@@ -333,12 +373,15 @@ public class LineLayerTest extends BaseStyleTest {
     assertEquals(SourceFunction.class, layer.getLineOpacity().getFunction().getClass());
     assertEquals("FeaturePropertyA", ((SourceFunction) layer.getLineOpacity().getFunction()).getProperty());
     assertEquals(CategoricalStops.class, layer.getLineOpacity().getFunction().getStops().getClass());
-    assertEquals(0.3f, ((SourceFunction) layer.getLineOpacity().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getLineOpacity().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getLineOpacity().getFunction()).getDefaultValue().getValue());
+    assertEquals(0.3f, ((SourceFunction) layer.getLineOpacity().getFunction()).getDefaultValue().getValue());
   }
 
   @Test
   public void testLineOpacityAsCompositeFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-opacity");
     assertNotNull(layer);
 
@@ -350,7 +393,7 @@ public class LineLayerTest extends BaseStyleTest {
           exponential(
             stop(0, 0.3f, lineOpacity(0.9f))
           ).withBase(0.5f)
-        ).withDefaultValue(0.3f)
+        ).withDefaultValue(lineOpacity(0.3f))
       )
     );
 
@@ -371,8 +414,22 @@ public class LineLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testLineColorTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("line-colorTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setLineColorTransition(options);
+    assertEquals(layer.getLineColorTransition(), options);
+  }
+
+  @Test
   public void testLineColorAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-color");
     assertNotNull(layer);
 
@@ -383,7 +440,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineColorAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-color");
     assertNotNull(layer);
 
@@ -409,7 +467,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineColorAsIdentitySourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-color");
     assertNotNull(layer);
 
@@ -428,7 +487,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineColorAsExponentialSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-color");
     assertNotNull(layer);
 
@@ -454,7 +514,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineColorAsCategoricalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-color");
     assertNotNull(layer);
 
@@ -466,7 +527,7 @@ public class LineLayerTest extends BaseStyleTest {
           categorical(
             stop("valueA", lineColor(Color.RED))
           )
-        )
+        ).withDefaultValue(lineColor(Color.GREEN))
       )
     );
 
@@ -476,11 +537,15 @@ public class LineLayerTest extends BaseStyleTest {
     assertEquals(SourceFunction.class, layer.getLineColor().getFunction().getClass());
     assertEquals("FeaturePropertyA", ((SourceFunction) layer.getLineColor().getFunction()).getProperty());
     assertEquals(CategoricalStops.class, layer.getLineColor().getFunction().getStops().getClass());
+    assertNotNull(((SourceFunction) layer.getLineColor().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getLineColor().getFunction()).getDefaultValue().getValue());
+    assertEquals(Color.GREEN, (int) ((SourceFunction) layer.getLineColor().getFunction()).getDefaultValue().getColorInt());
   }
 
   @Test
   public void testLineColorAsIntConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-color");
     assertNotNull(layer);
 
@@ -490,8 +555,22 @@ public class LineLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testLineTranslateTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("line-translateTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setLineTranslateTransition(options);
+    assertEquals(layer.getLineTranslateTransition(), options);
+  }
+
+  @Test
   public void testLineTranslateAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-translate");
     assertNotNull(layer);
 
@@ -502,7 +581,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineTranslateAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-translate");
     assertNotNull(layer);
 
@@ -528,7 +608,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineTranslateAnchorAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-translate-anchor");
     assertNotNull(layer);
 
@@ -539,7 +620,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineTranslateAnchorAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-translate-anchor");
     assertNotNull(layer);
 
@@ -563,8 +645,22 @@ public class LineLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testLineWidthTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("line-widthTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setLineWidthTransition(options);
+    assertEquals(layer.getLineWidthTransition(), options);
+  }
+
+  @Test
   public void testLineWidthAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-width");
     assertNotNull(layer);
 
@@ -575,7 +671,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineWidthAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-width");
     assertNotNull(layer);
 
@@ -600,8 +697,22 @@ public class LineLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testLineGapWidthTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("line-gap-widthTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setLineGapWidthTransition(options);
+    assertEquals(layer.getLineGapWidthTransition(), options);
+  }
+
+  @Test
   public void testLineGapWidthAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-gap-width");
     assertNotNull(layer);
 
@@ -612,7 +723,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineGapWidthAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-gap-width");
     assertNotNull(layer);
 
@@ -638,7 +750,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineGapWidthAsIdentitySourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-gap-width");
     assertNotNull(layer);
 
@@ -657,7 +770,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineGapWidthAsExponentialSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-gap-width");
     assertNotNull(layer);
 
@@ -683,7 +797,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineGapWidthAsCategoricalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-gap-width");
     assertNotNull(layer);
 
@@ -695,7 +810,7 @@ public class LineLayerTest extends BaseStyleTest {
           categorical(
             stop(1.0f, lineGapWidth(0.3f))
           )
-        ).withDefaultValue(0.3f)
+        ).withDefaultValue(lineGapWidth(0.3f))
       )
     );
 
@@ -705,12 +820,15 @@ public class LineLayerTest extends BaseStyleTest {
     assertEquals(SourceFunction.class, layer.getLineGapWidth().getFunction().getClass());
     assertEquals("FeaturePropertyA", ((SourceFunction) layer.getLineGapWidth().getFunction()).getProperty());
     assertEquals(CategoricalStops.class, layer.getLineGapWidth().getFunction().getStops().getClass());
-    assertEquals(0.3f, ((SourceFunction) layer.getLineGapWidth().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getLineGapWidth().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getLineGapWidth().getFunction()).getDefaultValue().getValue());
+    assertEquals(0.3f, ((SourceFunction) layer.getLineGapWidth().getFunction()).getDefaultValue().getValue());
   }
 
   @Test
   public void testLineGapWidthAsCompositeFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-gap-width");
     assertNotNull(layer);
 
@@ -722,7 +840,7 @@ public class LineLayerTest extends BaseStyleTest {
           exponential(
             stop(0, 0.3f, lineGapWidth(0.9f))
           ).withBase(0.5f)
-        ).withDefaultValue(0.3f)
+        ).withDefaultValue(lineGapWidth(0.3f))
       )
     );
 
@@ -743,8 +861,22 @@ public class LineLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testLineOffsetTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("line-offsetTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setLineOffsetTransition(options);
+    assertEquals(layer.getLineOffsetTransition(), options);
+  }
+
+  @Test
   public void testLineOffsetAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-offset");
     assertNotNull(layer);
 
@@ -755,7 +887,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineOffsetAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-offset");
     assertNotNull(layer);
 
@@ -781,7 +914,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineOffsetAsIdentitySourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-offset");
     assertNotNull(layer);
 
@@ -800,7 +934,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineOffsetAsExponentialSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-offset");
     assertNotNull(layer);
 
@@ -826,7 +961,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineOffsetAsCategoricalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-offset");
     assertNotNull(layer);
 
@@ -838,7 +974,7 @@ public class LineLayerTest extends BaseStyleTest {
           categorical(
             stop(1.0f, lineOffset(0.3f))
           )
-        ).withDefaultValue(0.3f)
+        ).withDefaultValue(lineOffset(0.3f))
       )
     );
 
@@ -848,12 +984,15 @@ public class LineLayerTest extends BaseStyleTest {
     assertEquals(SourceFunction.class, layer.getLineOffset().getFunction().getClass());
     assertEquals("FeaturePropertyA", ((SourceFunction) layer.getLineOffset().getFunction()).getProperty());
     assertEquals(CategoricalStops.class, layer.getLineOffset().getFunction().getStops().getClass());
-    assertEquals(0.3f, ((SourceFunction) layer.getLineOffset().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getLineOffset().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getLineOffset().getFunction()).getDefaultValue().getValue());
+    assertEquals(0.3f, ((SourceFunction) layer.getLineOffset().getFunction()).getDefaultValue().getValue());
   }
 
   @Test
   public void testLineOffsetAsCompositeFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-offset");
     assertNotNull(layer);
 
@@ -865,7 +1004,7 @@ public class LineLayerTest extends BaseStyleTest {
           exponential(
             stop(0, 0.3f, lineOffset(0.9f))
           ).withBase(0.5f)
-        ).withDefaultValue(0.3f)
+        ).withDefaultValue(lineOffset(0.3f))
       )
     );
 
@@ -886,8 +1025,22 @@ public class LineLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testLineBlurTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("line-blurTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setLineBlurTransition(options);
+    assertEquals(layer.getLineBlurTransition(), options);
+  }
+
+  @Test
   public void testLineBlurAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-blur");
     assertNotNull(layer);
 
@@ -898,7 +1051,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineBlurAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-blur");
     assertNotNull(layer);
 
@@ -924,7 +1078,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineBlurAsIdentitySourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-blur");
     assertNotNull(layer);
 
@@ -943,7 +1098,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineBlurAsExponentialSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-blur");
     assertNotNull(layer);
 
@@ -969,7 +1125,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineBlurAsCategoricalSourceFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-blur");
     assertNotNull(layer);
 
@@ -981,7 +1138,7 @@ public class LineLayerTest extends BaseStyleTest {
           categorical(
             stop(1.0f, lineBlur(0.3f))
           )
-        ).withDefaultValue(0.3f)
+        ).withDefaultValue(lineBlur(0.3f))
       )
     );
 
@@ -991,12 +1148,15 @@ public class LineLayerTest extends BaseStyleTest {
     assertEquals(SourceFunction.class, layer.getLineBlur().getFunction().getClass());
     assertEquals("FeaturePropertyA", ((SourceFunction) layer.getLineBlur().getFunction()).getProperty());
     assertEquals(CategoricalStops.class, layer.getLineBlur().getFunction().getStops().getClass());
-    assertEquals(0.3f, ((SourceFunction) layer.getLineBlur().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getLineBlur().getFunction()).getDefaultValue());
+    assertNotNull(((SourceFunction) layer.getLineBlur().getFunction()).getDefaultValue().getValue());
+    assertEquals(0.3f, ((SourceFunction) layer.getLineBlur().getFunction()).getDefaultValue().getValue());
   }
 
   @Test
   public void testLineBlurAsCompositeFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-blur");
     assertNotNull(layer);
 
@@ -1008,7 +1168,7 @@ public class LineLayerTest extends BaseStyleTest {
           exponential(
             stop(0, 0.3f, lineBlur(0.9f))
           ).withBase(0.5f)
-        ).withDefaultValue(0.3f)
+        ).withDefaultValue(lineBlur(0.3f))
       )
     );
 
@@ -1029,8 +1189,22 @@ public class LineLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testLineDasharrayTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("line-dasharrayTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setLineDasharrayTransition(options);
+    assertEquals(layer.getLineDasharrayTransition(), options);
+  }
+
+  @Test
   public void testLineDasharrayAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-dasharray");
     assertNotNull(layer);
 
@@ -1041,7 +1215,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLineDasharrayAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-dasharray");
     assertNotNull(layer);
 
@@ -1065,8 +1240,22 @@ public class LineLayerTest extends BaseStyleTest {
   }
 
   @Test
+  public void testLinePatternTransition() {
+    validateTestSetup();
+    setupLayer();
+    Timber.i("line-patternTransitionOptions");
+    assertNotNull(layer);
+
+    // Set and Get
+    TransitionOptions options = new TransitionOptions(300, 100);
+    layer.setLinePatternTransition(options);
+    assertEquals(layer.getLinePatternTransition(), options);
+  }
+
+  @Test
   public void testLinePatternAsConstant() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-pattern");
     assertNotNull(layer);
 
@@ -1077,7 +1266,8 @@ public class LineLayerTest extends BaseStyleTest {
 
   @Test
   public void testLinePatternAsCameraFunction() {
-    checkViewIsDisplayed(R.id.mapView);
+    validateTestSetup();
+    setupLayer();
     Timber.i("line-pattern");
     assertNotNull(layer);
 
@@ -1100,9 +1290,4 @@ public class LineLayerTest extends BaseStyleTest {
     assertEquals(1, ((IntervalStops) layer.getLinePattern().getFunction().getStops()).size());
   }
 
-
-  @After
-  public void unregisterIntentServiceIdlingResource() {
-    Espresso.unregisterIdlingResources(idlingResource);
-  }
 }

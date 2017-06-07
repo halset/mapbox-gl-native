@@ -10,10 +10,6 @@
 #include <QString>
 #include <QStringList>
 
-#if QT_VERSION >= 0x050000
-#include <QOpenGLFramebufferObject>
-#endif
-
 class QMapboxGLPrivate;
 
 // This header follows the Qt coding style: https://wiki.qt.io/Qt_Coding_Style
@@ -98,7 +94,6 @@ class Q_DECL_EXPORT QMapboxGL : public QObject
     Q_PROPERTY(QMargins margins READ margins WRITE setMargins)
 
 public:
-    // Reflects mbgl::MapChange.
     enum MapChange {
         MapChangeRegionWillChange = 0,
         MapChangeRegionWillChangeAnimated,
@@ -173,12 +168,6 @@ public:
 
     void setGestureInProgress(bool inProgress);
 
-    void addClass(const QString &);
-    void removeClass(const QString &);
-    bool hasClass(const QString &) const;
-    void setClasses(const QStringList &);
-    QStringList getClasses() const;
-
     void setTransitionOptions(qint64 duration, qint64 delay = 0);
 
     void addAnnotationIcon(const QString &name, const QImage &sprite);
@@ -188,7 +177,7 @@ public:
     void removeAnnotation(QMapbox::AnnotationID);
 
     void setLayoutProperty(const QString &layer, const QString &property, const QVariant &value);
-    void setPaintProperty(const QString &layer, const QString &property, const QVariant &value, const QString &klass = QString());
+    void setPaintProperty(const QString &layer, const QString &property, const QVariant &value);
 
     bool isFullyLoaded() const;
 
@@ -197,7 +186,11 @@ public:
     void rotateBy(const QPointF &first, const QPointF &second);
 
     void resize(const QSize &size, const QSize &framebufferSize);
+    void setFramebufferObject(quint32 fbo);
 
+    double metersPerPixelAtLatitude(double latitude, double zoom) const;
+    QMapbox::ProjectedMeters projectedMetersForCoordinate(const QMapbox::Coordinate &) const;
+    QMapbox::Coordinate coordinateForProjectedMeters(const QMapbox::ProjectedMeters &) const;
     QPointF pixelForCoordinate(const QMapbox::Coordinate &) const;
     QMapbox::Coordinate coordinateForPixel(const QPointF &) const;
 
@@ -220,19 +213,15 @@ public:
         QMapbox::CustomLayerRenderFunction,
         QMapbox::CustomLayerDeinitializeFunction,
         void* context,
-        char* before = NULL);
-    void addLayer(const QVariantMap &params);
+        const QString& before = QString());
+    void addLayer(const QVariantMap &params, const QString& before = QString());
     bool layerExists(const QString &id);
     void removeLayer(const QString &id);
 
     void setFilter(const QString &layer, const QVariant &filter);
 
 public slots:
-#if QT_VERSION >= 0x050000
-    void render(QOpenGLFramebufferObject *fbo = NULL);
-#else
     void render();
-#endif
     void connectionEstablished();
 
 signals:
