@@ -583,6 +583,10 @@ OfflineRegionMetadata OfflineDatabase::updateMetadata(const int64_t regionID, co
 }
 
 void OfflineDatabase::deleteRegion(OfflineRegion&& region) {
+    
+    // transaction to work around forreign keys
+    mapbox::sqlite::Transaction transaction(*db, mapbox::sqlite::Transaction::Immediate);
+    
     // clang-format off
     Statement stmt1 = getStatement(
         "DELETE FROM tiles WHERE id in ("
@@ -634,6 +638,8 @@ void OfflineDatabase::deleteRegion(OfflineRegion&& region) {
 
     stmt5->bind(1, region.getID());
     stmt5->run();
+    
+    transaction.commit();
 
     evict(0);
     db->exec("PRAGMA incremental_vacuum");
