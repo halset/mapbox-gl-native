@@ -279,13 +279,9 @@ MGL_EXPORT
  */
 - (void)setMaximumAllowedMapboxTiles:(uint64_t)maximumCount;
 
--(void)putTileWithUrlTemplate:(NSString *)urlTemplate pixelRatio:(float)pixelRatio x:(int32_t)x y:(int32_t)y z:(int8_t)z data:(NSData *)data completionHandler:(void (^)(NSError * _Nullable error))completion;
+-(void)putTileWithUrlTemplate:(NSString *)urlTemplate pixelRatio:(float)pixelRatio x:(int32_t)x y:(int32_t)y z:(int8_t)z data:(NSData *)data compressed:(BOOL)compressed pack:(MGLOfflinePack *)pack completionHandler:(void (^)(NSError * _Nullable error))completion;
 
--(void)putTileWithUrlTemplate:(NSString *)urlTemplate pixelRatio:(float)pixelRatio x:(int32_t)x y:(int32_t)y z:(int8_t)z data:(NSData *)data pack:(MGLOfflinePack *)pack completionHandler:(void (^)(NSError * _Nullable error))completion;
-
--(void)putResourceWithUrl:(NSString *)url data:(NSData *)data completionHandler:(void (^)(NSError * _Nullable error))completion;
-
--(void)putResourceWithUrl:(NSString *)url data:(NSData *)data pack:(MGLOfflinePack *)pack completionHandler:(void (^)(NSError * _Nullable error))completion;
+-(void)putResourceWithUrl:(NSString *)url data:(NSData *)data compressed:(BOOL)compressed pack:(MGLOfflinePack *)pack completionHandler:(void (^)(NSError * _Nullable error))completion;
 
 /**
  The cumulative size, measured in bytes, of all downloaded resources on disk.
