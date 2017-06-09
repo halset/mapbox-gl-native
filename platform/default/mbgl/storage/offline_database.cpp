@@ -584,9 +584,8 @@ OfflineRegionMetadata OfflineDatabase::updateMetadata(const int64_t regionID, co
 
 void OfflineDatabase::deleteRegion(OfflineRegion&& region) {
     
-    // transaction to work around forreign keys
-    mapbox::sqlite::Transaction transaction(*db, mapbox::sqlite::Transaction::Immediate);
-    
+    db->exec("PRAGMA foreign_keys = OFF");
+
     // clang-format off
     Statement stmt1 = getStatement(
         "DELETE FROM tiles WHERE id in ("
@@ -600,21 +599,7 @@ void OfflineDatabase::deleteRegion(OfflineRegion&& region) {
     stmt1->bind(1, region.getID());
     stmt1->bind(2, region.getID());
     stmt1->run();
-    /*
-    // clang-format off
-    Statement stmt2 = getStatement(
-        "DELETE FROM resources WHERE id in ("
-        "  SELECT resource_id from region_resources where region_id = ?1"
-        ") and id not in ("
-        "  SELECT resource_id from region_resources where region_id != ?2"
-        ")"
-    );
-    // clang-format on
-    
-    stmt2->bind(1, region.getID());
-    stmt2->bind(2, region.getID());
-    stmt2->run();
-    */
+
     // clang-format off
     Statement stmt3 = getStatement(
         "DELETE FROM region_tiles WHERE region_id = ?");
@@ -622,15 +607,7 @@ void OfflineDatabase::deleteRegion(OfflineRegion&& region) {
     
     stmt3->bind(1, region.getID());
     stmt3->run();
-
-    // clang-format off
-    Statement stmt4 = getStatement(
-        "DELETE FROM region_resources WHERE region_id = ?");
-    // clang-format on
     
-    stmt4->bind(1, region.getID());
-    stmt4->run();
-
     // clang-format off
     Statement stmt5 = getStatement(
         "DELETE FROM regions WHERE id = ?");
@@ -639,7 +616,7 @@ void OfflineDatabase::deleteRegion(OfflineRegion&& region) {
     stmt5->bind(1, region.getID());
     stmt5->run();
     
-    transaction.commit();
+    db->exec("PRAGMA foreign_keys = ON");
 
     evict(0);
     db->exec("PRAGMA incremental_vacuum");
