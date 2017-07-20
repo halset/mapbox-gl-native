@@ -15,19 +15,20 @@
 #include <mbgl/renderer/layers/render_line_layer.hpp>
 #include <mbgl/renderer/layers/render_raster_layer.hpp>
 #include <mbgl/renderer/layers/render_symbol_layer.hpp>
+#include <mbgl/renderer/backend_scope.hpp>
 #include <mbgl/renderer/style_diff.hpp>
+#include <mbgl/renderer/image_manager.hpp>
+#include <mbgl/renderer/query.hpp>
 #include <mbgl/style/style.hpp>
 #include <mbgl/style/source_impl.hpp>
 #include <mbgl/style/transition_options.hpp>
-#include <mbgl/sprite/sprite_atlas.hpp>
 #include <mbgl/sprite/sprite_loader.hpp>
-#include <mbgl/text/glyph_atlas.hpp>
+#include <mbgl/text/glyph_manager.hpp>
 #include <mbgl/geometry/line_atlas.hpp>
-#include <mbgl/sprite/sprite_atlas.hpp>
-#include <mbgl/map/query.hpp>
 #include <mbgl/tile/tile.hpp>
 #include <mbgl/util/math.hpp>
 #include <mbgl/util/string.hpp>
+#include <mbgl/util/logging.hpp>
 
 namespace mbgl {
 
@@ -38,18 +39,20 @@ RenderStyleObserver nullObserver;
 RenderStyle::RenderStyle(Scheduler& scheduler_, FileSource& fileSource_)
     : scheduler(scheduler_),
       fileSource(fileSource_),
-      glyphAtlas(std::make_unique<GlyphAtlas>(Size{ 2048, 2048 }, fileSource)),
-      spriteAtlas(std::make_unique<SpriteAtlas>()),
+      glyphManager(std::make_unique<GlyphManager>(fileSource)),
+      imageManager(std::make_unique<ImageManager>()),
       lineAtlas(std::make_unique<LineAtlas>(Size{ 256, 512 })),
       imageImpls(makeMutable<std::vector<Immutable<style::Image::Impl>>>()),
       sourceImpls(makeMutable<std::vector<Immutable<style::Source::Impl>>>()),
       layerImpls(makeMutable<std::vector<Immutable<style::Layer::Impl>>>()),
       renderLight(makeMutable<Light::Impl>()),
       observer(&nullObserver) {
-    glyphAtlas->setObserver(this);
+    glyphManager->setObserver(this);
 }
 
-RenderStyle::~RenderStyle() = default;
+RenderStyle::~RenderStyle() {
+    assert(BackendScope::exists()); // Required for custom layers.
+}
 
 void RenderStyle::setObserver(RenderStyleObserver* observer_) {
     observer = observer_;
@@ -79,17 +82,19 @@ const RenderLight& RenderStyle::getRenderLight() const {
 }
 
 void RenderStyle::update(const UpdateParameters& parameters) {
+    assert(BackendScope::exists()); // Required for custom layers.
+
     const bool zoomChanged = zoomHistory.update(parameters.transformState.getZoom(), parameters.timePoint);
 
     const TransitionParameters transitionParameters {
-        parameters.mode == MapMode::Continuous ? parameters.timePoint : Clock::time_point::max(),
+        parameters.timePoint,
         parameters.mode == MapMode::Continuous ? parameters.transitionOptions : TransitionOptions()
     };
 
     const PropertyEvaluationParameters evaluationParameters {
         zoomHistory,
-        parameters.mode == MapMode::Continuous ? parameters.timePoint : Clock::time_point::max(),
-        parameters.mode == MapMode::Continuous ? util::DEFAULT_FADE_DURATION : Duration::zero()
+        parameters.timePoint,
+        parameters.mode == MapMode::Continuous ? util::DEFAULT_TRANSITION_DURATION : Duration::zero()
     };
 
     const TileParameters tileParameters {
@@ -100,11 +105,12 @@ void RenderStyle::update(const UpdateParameters& parameters) {
         parameters.fileSource,
         parameters.mode,
         parameters.annotationManager,
-        *spriteAtlas,
-        *glyphAtlas
+        *imageManager,
+        *glyphManager,
+        parameters.prefetchZoomDelta
     };
 
-    glyphAtlas->setURL(parameters.glyphURL);
+    glyphManager->setURL(parameters.glyphURL);
 
     // Update light.
     const bool lightChanged = renderLight.impl != parameters.light;
@@ -124,21 +130,21 @@ void RenderStyle::update(const UpdateParameters& parameters) {
 
     // Remove removed images from sprite atlas.
     for (const auto& entry : imageDiff.removed) {
-        spriteAtlas->removeImage(entry.first);
+        imageManager->removeImage(entry.first);
     }
 
     // Add added images to sprite atlas.
     for (const auto& entry : imageDiff.added) {
-        spriteAtlas->addImage(entry.second);
+        imageManager->addImage(entry.second);
     }
 
     // Update changed images.
     for (const auto& entry : imageDiff.changed) {
-        spriteAtlas->updateImage(entry.second.after);
+        imageManager->updateImage(entry.second.after);
     }
 
-    if (parameters.spriteLoaded && !spriteAtlas->isLoaded()) {
-        spriteAtlas->onSpriteLoaded();
+    if (parameters.spriteLoaded && !imageManager->isLoaded()) {
+        imageManager->onSpriteLoaded();
     }
 
 
@@ -204,11 +210,15 @@ void RenderStyle::update(const UpdateParameters& parameters) {
                 continue;
             }
 
-            if (getRenderLayer(layer->id)->needsRendering(zoomHistory.lastZoom)) {
+            if (!needsRendering && getRenderLayer(layer->id)->needsRendering(zoomHistory.lastZoom)) {
                 needsRendering = true;
             }
 
-            if (hasLayoutDifference(layerDiff, layer->id)) {
+            if (!needsRelayout && (
+                hasLayoutDifference(layerDiff, layer->id) ||
+                !imageDiff.added.empty() ||
+                !imageDiff.removed.empty() ||
+                !imageDiff.changed.empty())) {
                 needsRelayout = true;
             }
 
@@ -249,7 +259,7 @@ bool RenderStyle::isLoaded() const {
         }
     }
 
-    if (!spriteAtlas->isLoaded()) {
+    if (!imageManager->isLoaded()) {
         return false;
     }
 
@@ -301,16 +311,12 @@ RenderData RenderStyle::getRenderData(MapDebugOptions debugOptions, float angle)
             continue;
         }
 
-        auto& renderTiles = source->getRenderTiles();
         const bool symbolLayer = layer->is<RenderSymbolLayer>();
 
-        // Sort symbol tiles in opposite y position, so tiles with overlapping
-        // symbols are drawn on top of each other, with lower symbols being
-        // drawn on top of higher symbols.
-        std::vector<std::reference_wrapper<RenderTile>> sortedTiles;
-        std::transform(renderTiles.begin(), renderTiles.end(), std::back_inserter(sortedTiles),
-                [](auto& pair) { return std::ref(pair.second); });
+        auto sortedTiles = source->getRenderTiles();
         if (symbolLayer) {
+            // Sort symbol tiles in opposite y position, so tiles with overlapping symbols are drawn
+            // on top of each other, with lower symbols being drawn on top of higher symbols.
             std::sort(sortedTiles.begin(), sortedTiles.end(),
                       [angle](const RenderTile& a, const RenderTile& b) {
                 Point<float> pa(a.id.canonical.x, a.id.canonical.y);
@@ -321,6 +327,9 @@ RenderData RenderStyle::getRenderData(MapDebugOptions debugOptions, float angle)
 
                 return std::tie(par.y, par.x) < std::tie(pbr.y, pbr.x);
             });
+        } else {
+            std::sort(sortedTiles.begin(), sortedTiles.end(),
+                      [](const auto& a, const auto& b) { return a.get().id < b.get().id; });
         }
 
         std::vector<std::reference_wrapper<RenderTile>> sortedTilesForInsertion;
@@ -409,12 +418,6 @@ std::vector<Feature> RenderStyle::queryRenderedFeatures(const ScreenLineString& 
     return result;
 }
 
-void RenderStyle::setSourceTileCacheSize(size_t size) {
-    for (const auto& entry : renderSources) {
-        entry.second->setCacheSize(size);
-    }
-}
-
 void RenderStyle::onLowMemory() {
     for (const auto& entry : renderSources) {
         entry.second->onLowMemory();
@@ -442,7 +445,7 @@ void RenderStyle::dumpDebugLogs() const {
         entry.second->dumpDebugLogs();
     }
 
-    spriteAtlas->dumpDebugLogs();
+    imageManager->dumpDebugLogs();
 }
 
 } // namespace mbgl

@@ -2,12 +2,12 @@
 
 set(MBGL_CORE_FILES
     # actor
+    include/mbgl/actor/actor.hpp
+    include/mbgl/actor/actor_ref.hpp
     include/mbgl/actor/mailbox.hpp
+    include/mbgl/actor/message.hpp
     include/mbgl/actor/scheduler.hpp
-    src/mbgl/actor/actor.hpp
-    src/mbgl/actor/actor_ref.hpp
     src/mbgl/actor/mailbox.cpp
-    src/mbgl/actor/message.hpp
 
     # algorithm
     src/mbgl/algorithm/covered_by_children.hpp
@@ -41,7 +41,6 @@ set(MBGL_CORE_FILES
 
     # geometry
     src/mbgl/geometry/anchor.hpp
-    src/mbgl/geometry/binpack.hpp
     src/mbgl/geometry/debug_font_data.hpp
     src/mbgl/geometry/feature_index.cpp
     src/mbgl/geometry/feature_index.hpp
@@ -74,8 +73,6 @@ set(MBGL_CORE_FILES
     src/mbgl/gl/program.hpp
     src/mbgl/gl/program_binary_extension.hpp
     src/mbgl/gl/renderbuffer.hpp
-    src/mbgl/gl/segment.cpp
-    src/mbgl/gl/segment.hpp
     src/mbgl/gl/state.hpp
     src/mbgl/gl/stencil_mode.cpp
     src/mbgl/gl/stencil_mode.hpp
@@ -85,6 +82,8 @@ set(MBGL_CORE_FILES
     src/mbgl/gl/uniform.hpp
     src/mbgl/gl/value.cpp
     src/mbgl/gl/value.hpp
+    src/mbgl/gl/vertex_array.cpp
+    src/mbgl/gl/vertex_array.hpp
     src/mbgl/gl/vertex_array_extension.hpp
     src/mbgl/gl/vertex_buffer.hpp
 
@@ -98,19 +97,16 @@ set(MBGL_CORE_FILES
     src/mbgl/layout/symbol_instance.hpp
     src/mbgl/layout/symbol_layout.cpp
     src/mbgl/layout/symbol_layout.hpp
+    src/mbgl/layout/symbol_projection.cpp
+    src/mbgl/layout/symbol_projection.hpp
 
     # map
-    include/mbgl/map/backend.hpp
-    include/mbgl/map/backend_scope.hpp
     include/mbgl/map/camera.hpp
     include/mbgl/map/change.hpp
     include/mbgl/map/map.hpp
     include/mbgl/map/map_observer.hpp
     include/mbgl/map/mode.hpp
-    include/mbgl/map/query.hpp
     include/mbgl/map/view.hpp
-    src/mbgl/map/backend.cpp
-    src/mbgl/map/backend_scope.cpp
     src/mbgl/map/map.cpp
     src/mbgl/map/transform.cpp
     src/mbgl/map/transform.hpp
@@ -148,15 +144,23 @@ set(MBGL_CORE_FILES
     src/mbgl/programs/line_program.cpp
     src/mbgl/programs/line_program.hpp
     src/mbgl/programs/program.hpp
+    src/mbgl/programs/program_parameters.cpp
     src/mbgl/programs/program_parameters.hpp
     src/mbgl/programs/programs.hpp
     src/mbgl/programs/raster_program.cpp
     src/mbgl/programs/raster_program.hpp
+    src/mbgl/programs/segment.hpp
     src/mbgl/programs/symbol_program.cpp
     src/mbgl/programs/symbol_program.hpp
     src/mbgl/programs/uniforms.hpp
 
     # renderer
+    include/mbgl/renderer/backend_scope.hpp
+    include/mbgl/renderer/query.hpp
+    include/mbgl/renderer/renderer.hpp
+    include/mbgl/renderer/renderer_backend.hpp
+    include/mbgl/renderer/renderer_frontend.hpp
+    src/mbgl/renderer/backend_scope.cpp
     src/mbgl/renderer/bucket.hpp
     src/mbgl/renderer/bucket_parameters.cpp
     src/mbgl/renderer/bucket_parameters.hpp
@@ -167,11 +171,14 @@ set(MBGL_CORE_FILES
     src/mbgl/renderer/frame_history.hpp
     src/mbgl/renderer/group_by_layout.cpp
     src/mbgl/renderer/group_by_layout.hpp
+    src/mbgl/renderer/image_atlas.cpp
+    src/mbgl/renderer/image_atlas.hpp
+    src/mbgl/renderer/image_manager.cpp
+    src/mbgl/renderer/image_manager.hpp
+    src/mbgl/renderer/paint_parameters.cpp
     src/mbgl/renderer/paint_parameters.hpp
     src/mbgl/renderer/paint_property_binder.hpp
     src/mbgl/renderer/paint_property_statistics.hpp
-    src/mbgl/renderer/painter.cpp
-    src/mbgl/renderer/painter.hpp
     src/mbgl/renderer/possibly_evaluated_property_value.hpp
     src/mbgl/renderer/property_evaluation_parameters.hpp
     src/mbgl/renderer/property_evaluator.hpp
@@ -184,11 +191,18 @@ set(MBGL_CORE_FILES
     src/mbgl/renderer/render_source.cpp
     src/mbgl/renderer/render_source.hpp
     src/mbgl/renderer/render_source_observer.hpp
+    src/mbgl/renderer/render_static_data.cpp
+    src/mbgl/renderer/render_static_data.hpp
     src/mbgl/renderer/render_style.cpp
     src/mbgl/renderer/render_style.hpp
     src/mbgl/renderer/render_style_observer.hpp
     src/mbgl/renderer/render_tile.cpp
     src/mbgl/renderer/render_tile.hpp
+    src/mbgl/renderer/renderer.cpp
+    src/mbgl/renderer/renderer_backend.cpp
+    src/mbgl/renderer/renderer_impl.cpp
+    src/mbgl/renderer/renderer_impl.hpp
+    src/mbgl/renderer/renderer_observer.hpp
     src/mbgl/renderer/style_diff.cpp
     src/mbgl/renderer/style_diff.hpp
     src/mbgl/renderer/tile_parameters.hpp
@@ -230,17 +244,6 @@ set(MBGL_CORE_FILES
     src/mbgl/renderer/layers/render_raster_layer.hpp
     src/mbgl/renderer/layers/render_symbol_layer.cpp
     src/mbgl/renderer/layers/render_symbol_layer.hpp
-
-    # renderer/painters
-    src/mbgl/renderer/painters/painter_background.cpp
-    src/mbgl/renderer/painters/painter_circle.cpp
-    src/mbgl/renderer/painters/painter_clipping.cpp
-    src/mbgl/renderer/painters/painter_debug.cpp
-    src/mbgl/renderer/painters/painter_fill.cpp
-    src/mbgl/renderer/painters/painter_fill_extrusion.cpp
-    src/mbgl/renderer/painters/painter_line.cpp
-    src/mbgl/renderer/painters/painter_raster.cpp
-    src/mbgl/renderer/painters/painter_symbol.cpp
 
     # renderer/sources
     src/mbgl/renderer/sources/render_geojson_source.cpp
@@ -291,8 +294,6 @@ set(MBGL_CORE_FILES
     src/mbgl/shaders/symbol_sdf.hpp
 
     # sprite
-    src/mbgl/sprite/sprite_atlas.cpp
-    src/mbgl/sprite/sprite_atlas.hpp
     src/mbgl/sprite/sprite_loader.cpp
     src/mbgl/sprite/sprite_loader.hpp
     src/mbgl/sprite/sprite_loader_observer.hpp
@@ -308,12 +309,16 @@ set(MBGL_CORE_FILES
     include/mbgl/storage/offline.hpp
     include/mbgl/storage/online_file_source.hpp
     include/mbgl/storage/resource.hpp
+    include/mbgl/storage/resource_transform.hpp
     include/mbgl/storage/response.hpp
     src/mbgl/storage/asset_file_source.hpp
+    src/mbgl/storage/file_source_request.cpp
+    src/mbgl/storage/file_source_request.hpp
     src/mbgl/storage/http_file_source.hpp
     src/mbgl/storage/local_file_source.hpp
     src/mbgl/storage/network_status.cpp
     src/mbgl/storage/resource.cpp
+    src/mbgl/storage/resource_transform.cpp
     src/mbgl/storage/response.cpp
 
     # style
@@ -328,6 +333,7 @@ set(MBGL_CORE_FILES
     include/mbgl/style/position.hpp
     include/mbgl/style/property_value.hpp
     include/mbgl/style/source.hpp
+    include/mbgl/style/style.hpp
     include/mbgl/style/transition_options.hpp
     include/mbgl/style/types.hpp
     include/mbgl/style/undefined.hpp
@@ -355,7 +361,8 @@ set(MBGL_CORE_FILES
     src/mbgl/style/source_impl.hpp
     src/mbgl/style/source_observer.hpp
     src/mbgl/style/style.cpp
-    src/mbgl/style/style.hpp
+    src/mbgl/style/style_impl.cpp
+    src/mbgl/style/style_impl.hpp
     src/mbgl/style/types.cpp
 
     # style/conversion
@@ -473,7 +480,9 @@ set(MBGL_CORE_FILES
     src/mbgl/text/glyph.hpp
     src/mbgl/text/glyph_atlas.cpp
     src/mbgl/text/glyph_atlas.hpp
-    src/mbgl/text/glyph_atlas_observer.hpp
+    src/mbgl/text/glyph_manager.cpp
+    src/mbgl/text/glyph_manager.hpp
+    src/mbgl/text/glyph_manager_observer.hpp
     src/mbgl/text/glyph_pbf.cpp
     src/mbgl/text/glyph_pbf.hpp
     src/mbgl/text/glyph_range.hpp
@@ -507,6 +516,8 @@ set(MBGL_CORE_FILES
     src/mbgl/tile/tile_observer.hpp
     src/mbgl/tile/vector_tile.cpp
     src/mbgl/tile/vector_tile.hpp
+    src/mbgl/tile/vector_tile_data.cpp
+    src/mbgl/tile/vector_tile_data.hpp
 
     # util
     include/mbgl/util/any.hpp
@@ -563,7 +574,7 @@ set(MBGL_CORE_FILES
     src/mbgl/util/event.cpp
     src/mbgl/util/font_stack.cpp
     src/mbgl/util/geo.cpp
-    src/mbgl/util/geojson.cpp
+    src/mbgl/util/geojson_impl.cpp
     src/mbgl/util/grid_index.cpp
     src/mbgl/util/grid_index.hpp
     src/mbgl/util/http_header.cpp
@@ -598,8 +609,6 @@ set(MBGL_CORE_FILES
     src/mbgl/util/stopwatch.hpp
     src/mbgl/util/string.cpp
     src/mbgl/util/thread.hpp
-    src/mbgl/util/thread_context.cpp
-    src/mbgl/util/thread_context.hpp
     src/mbgl/util/thread_local.hpp
     src/mbgl/util/throttler.cpp
     src/mbgl/util/throttler.hpp

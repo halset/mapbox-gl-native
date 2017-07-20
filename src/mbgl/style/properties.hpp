@@ -20,6 +20,10 @@ class Transitioning {
 public:
     Transitioning() = default;
 
+    explicit Transitioning(Value value_)
+        : value(std::move(value_)) {
+    }
+
     Transitioning(Value value_,
                   Transitioning<Value> prior_,
                   TransitionOptions transition,
@@ -125,12 +129,18 @@ public:
 
     class Evaluated : public Tuple<EvaluatedTypes> {
     public:
-        using Tuple<EvaluatedTypes>::Tuple;
+        template <class... Us>
+        Evaluated(Us&&... us)
+            : Tuple<EvaluatedTypes>(std::forward<Us>(us)...) {
+        }
     };
 
     class PossiblyEvaluated : public Tuple<PossiblyEvaluatedTypes> {
     public:
-        using Tuple<PossiblyEvaluatedTypes>::Tuple;
+        template <class... Us>
+        PossiblyEvaluated(Us&&... us)
+            : Tuple<PossiblyEvaluatedTypes>(std::forward<Us>(us)...) {
+        }
 
         template <class T>
         static T evaluate(float, const GeometryTileFeature&, const T& t, const T&) {
@@ -166,7 +176,10 @@ public:
 
     class Unevaluated : public Tuple<UnevaluatedTypes> {
     public:
-        using Tuple<UnevaluatedTypes>::Tuple;
+        template <class... Us>
+        Unevaluated(Us&&... us)
+            : Tuple<UnevaluatedTypes>(std::forward<Us>(us)...) {
+        }
 
         bool hasTransition() const {
             bool result = false;
@@ -197,12 +210,21 @@ public:
 
     class Transitionable : public Tuple<TransitionableTypes> {
     public:
-        using Tuple<TransitionableTypes>::Tuple;
+        template <class... Us>
+        Transitionable(Us&&... us)
+            : Tuple<TransitionableTypes>(std::forward<Us>(us)...) {
+        }
 
-        Unevaluated transition(const TransitionParameters& parameters, Unevaluated&& prior) const {
+        Unevaluated transitioned(const TransitionParameters& parameters, Unevaluated&& prior) const {
             return Unevaluated {
                 this->template get<Ps>()
                     .transition(parameters, std::move(prior.template get<Ps>()))...
+            };
+        }
+
+        Unevaluated untransitioned() const {
+            return Unevaluated {
+                typename Ps::UnevaluatedType(this->template get<Ps>().value)...
             };
         }
 
@@ -212,6 +234,14 @@ public:
             return result;
         }
     };
+};
+
+template <class...>
+struct ConcatenateProperties;
+
+template <class... As, class... Bs>
+struct ConcatenateProperties<TypeList<As...>, TypeList<Bs...>> {
+    using Type = Properties<As..., Bs...>;
 };
 
 } // namespace style

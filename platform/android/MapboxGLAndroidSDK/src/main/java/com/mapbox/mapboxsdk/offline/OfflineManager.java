@@ -116,6 +116,12 @@ public class OfflineManager {
     }).start();
   }
 
+  /**
+   * Get the single instance of offline manager.
+   *
+   * @param context the context used to host the offline manager
+   * @return the single instance of offline manager
+   */
   public static synchronized OfflineManager getInstance(Context context) {
     if (instance == null) {
       instance = new OfflineManager(context);
@@ -230,10 +236,11 @@ public class OfflineManager {
     return LatLngBounds.world().contains(definition.getBounds());
   }
 
-  /*
-  * Changing or bypassing this limit without permission from Mapbox is prohibited
-  * by the Mapbox Terms of Service.
-  */
+  /**
+   * Changing or bypassing this limit without permission from Mapbox is prohibited
+   * by the Mapbox Terms of Service.
+   * @param limit the new tile count limit.
+   */
   public native void setOfflineMapboxTileCountLimit(long limit);
 
   private native void initialize(FileSource fileSource);

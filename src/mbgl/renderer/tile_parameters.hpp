@@ -8,20 +8,21 @@ class TransformState;
 class Scheduler;
 class FileSource;
 class AnnotationManager;
-class SpriteAtlas;
-class GlyphAtlas;
+class ImageManager;
+class GlyphManager;
 
 class TileParameters {
 public:
-    float pixelRatio;
-    MapDebugOptions debugOptions;
+    const float pixelRatio;
+    const MapDebugOptions debugOptions;
     const TransformState& transformState;
     Scheduler& workerScheduler;
     FileSource& fileSource;
     const MapMode mode;
     AnnotationManager& annotationManager;
-    SpriteAtlas& spriteAtlas;
-    GlyphAtlas& glyphAtlas;
+    ImageManager& imageManager;
+    GlyphManager& glyphManager;
+    const uint8_t prefetchZoomDelta;
 };
 
 } // namespace mbgl

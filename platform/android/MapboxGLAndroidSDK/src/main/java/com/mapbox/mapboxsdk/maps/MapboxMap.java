@@ -37,7 +37,6 @@ import com.mapbox.mapboxsdk.constants.MyLocationTracking;
 import com.mapbox.mapboxsdk.constants.Style;
 import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.mapbox.mapboxsdk.geometry.LatLngBounds;
-import com.mapbox.mapboxsdk.location.LocationSource;
 import com.mapbox.mapboxsdk.maps.widgets.MyLocationViewSettings;
 import com.mapbox.mapboxsdk.style.layers.Filter;
 import com.mapbox.mapboxsdk.style.layers.Layer;
@@ -100,6 +99,7 @@ public final class MapboxMap {
     setDebugActive(options.getDebugActive());
     setApiBaseUrl(options);
     setStyleUrl(options);
+    setPrefetchesTiles(options);
   }
 
   /**
@@ -141,12 +141,20 @@ public final class MapboxMap {
    */
   void onRestoreInstanceState(Bundle savedInstanceState) {
     final CameraPosition cameraPosition = savedInstanceState.getParcelable(MapboxConstants.STATE_CAMERA_POSITION);
-    if (cameraPosition != null) {
-      moveCamera(CameraUpdateFactory.newCameraPosition(new CameraPosition.Builder(cameraPosition).build()));
-    }
 
     uiSettings.onRestoreInstanceState(savedInstanceState);
     trackingSettings.onRestoreInstanceState(savedInstanceState);
+
+    if (cameraPosition != null) {
+      easeCamera(CameraUpdateFactory.newCameraPosition(
+        new CameraPosition.Builder(cameraPosition).build()),
+        0,
+        false,
+        null,
+        !trackingSettings.isLocationTrackingDisabled()
+      );
+    }
+
     nativeMapView.setDebug(savedInstanceState.getBoolean(MapboxConstants.STATE_DEBUG_ACTIVE));
 
     final String styleUrl = savedInstanceState.getString(MapboxConstants.STATE_STYLE_URL);
@@ -238,6 +246,38 @@ public final class MapboxMap {
   @UiThread
   public void setTransitionDelay(long delayMs) {
     nativeMapView.setTransitionDelay(delayMs);
+  }
+
+  /**
+   * Sets tile pre-fetching from MapboxOptions.
+   *
+   * @param options the options object
+   */
+  private void setPrefetchesTiles(@NonNull MapboxMapOptions options) {
+    setPrefetchesTiles(options.getPrefetchesTiles());
+  }
+
+  /**
+   * Enable or disable tile pre-fetching. Pre-fetching makes sure that a low-resolution
+   * tile is rendered as soon as possible at the expense of a little bandwidth.
+   *
+   * @param enable true to enable
+   */
+  @UiThread
+  public void setPrefetchesTiles(boolean enable) {
+    nativeMapView.setPrefetchesTiles(enable);
+  }
+
+  /**
+   * Check whether tile pre-fetching is enabled or not.
+   *
+   * @return true if enabled
+   *
+   * @see MapboxMap#setPrefetchesTiles(boolean)
+   */
+  @UiThread
+  public boolean getPrefetchesTiles() {
+    return nativeMapView.getPrefetchesTiles();
   }
 
   /**
@@ -729,8 +769,8 @@ public final class MapboxMap {
    * will return the current location of the camera in flight.
    * <p>
    * Note that this will cancel location tracking mode if enabled. You can change this behaviour by calling
-   * {@link TrackingSettings#setDismissTrackingModeForCameraPositionChange(boolean)} with false before invoking this
-   * method and calling it with true in the {@link CancelableCallback#onFinish()}.
+   * {@link com.mapbox.mapboxsdk.maps.TrackingSettings#setDismissLocationTrackingOnGesture(boolean)} with false before
+   * invoking this method and calling it with true in the {@link CancelableCallback#onFinish()}.
    * </p>
    *
    * @param update             The change that should be applied to the camera.
@@ -756,8 +796,8 @@ public final class MapboxMap {
    * will return the current location of the camera in flight.
    * <p>
    * Note that this will cancel location tracking mode if enabled. You can change this behaviour by calling
-   * {@link TrackingSettings#setDismissTrackingModeForCameraPositionChange(boolean)} with false before invoking this
-   * method and calling it with true in the {@link CancelableCallback#onFinish()}.
+   * {@link com.mapbox.mapboxsdk.maps.TrackingSettings#setDismissLocationTrackingOnGesture(boolean)} with false before
+   * invoking this method and calling it with true in the {@link CancelableCallback#onFinish()}.
    * </p>
    *
    * @param update             The change that should be applied to the camera.
@@ -880,7 +920,12 @@ public final class MapboxMap {
   }
 
   /**
-   * Set focal bearing.
+   * Transform the map bearing given a bearing, focal point coordinates, and a duration.
+   *
+   * @param bearing  The bearing of the Map to be transformed to
+   * @param focalX   The x coordinate of the focal point
+   * @param focalY   The y coordinate of the focal point
+   * @param duration The duration of the transformation
    */
   public void setFocalBearing(double bearing, float focalX, float focalY, long duration) {
     transform.setBearing(bearing, focalX, focalY, duration);
@@ -1052,7 +1097,7 @@ public final class MapboxMap {
    * An error message will be logged in the Android logcat and {@link MapView#DID_FAIL_LOADING_MAP} event will be
    * sent.
    *
-   * @param style The bundled style. Accepts one of the values from {@link Style}.
+   * @param style The bundled style.
    * @see Style
    */
   @UiThread
@@ -1068,7 +1113,8 @@ public final class MapboxMap {
    * An error message will be logged in the Android logcat and {@link MapView#DID_FAIL_LOADING_MAP} event will be
    * sent.
    *
-   * @param style The bundled style. Accepts one of the values from {@link Style}.
+   * @param style    The bundled style.
+   * @param callback The callback to be invoked when the style has finished loading
    * @see Style
    */
   @UiThread
@@ -1447,6 +1493,28 @@ public final class MapboxMap {
   }
 
   /**
+   * Sets a callback that's invoked when the user clicks on a polygon.
+   *
+   * @param listener The callback that's invoked when the user clicks on a polygon.
+   *                 To unset the callback, use null.
+   */
+  @UiThread
+  public void setOnPolygonClickListener(@Nullable OnPolygonClickListener listener) {
+    annotationManager.setOnPolygonClickListener(listener);
+  }
+
+  /**
+   * Sets a callback that's invoked when the user clicks on a polyline.
+   *
+   * @param listener The callback that's invoked when the user clicks on a polyline.
+   *                 To unset the callback, use null.
+   */
+  @UiThread
+  public void setOnPolylineClickListener(@Nullable OnPolylineClickListener listener) {
+    annotationManager.setOnPolylineClickListener(listener);
+  }
+
+  /**
    * <p>
    * Selects a marker. The selected marker will have it's info window opened.
    * Any other open info windows will be closed unless isAllowConcurrentMultipleOpenInfoWindows()
@@ -1569,9 +1637,11 @@ public final class MapboxMap {
   }
 
   /**
-   * Gets a camera position that would fit a bounds.
+   * Get a camera position that fits a provided bounds and padding.
    *
    * @param latLngBounds the bounds to constrain the map with
+   * @param padding      the padding to apply to the bounds
+   * @return the camera position that fits the bounds and padding
    */
   public CameraPosition getCameraForLatLngBounds(@Nullable LatLngBounds latLngBounds, int[] padding) {
     // calculate and set additional bounds padding
@@ -1864,8 +1934,6 @@ public final class MapboxMap {
    * Replaces the location source of the my-location layer.
    *
    * @param locationSource A {@link LocationEngine} location source to use in the my-location layer.
-   *                       Set to null to use the default {@link LocationSource}
-   *                       location source.
    */
   @UiThread
   public void setLocationSource(@Nullable LocationEngine locationSource) {
@@ -2138,6 +2206,34 @@ public final class MapboxMap {
   }
 
   /**
+   * Interface definition for a callback to be invoked when the user clicks on a polygon.
+   *
+   * @see MapboxMap#setOnPolygonClickListener(OnPolygonClickListener)
+   */
+  public interface OnPolygonClickListener {
+    /**
+     * Called when the user clicks on a polygon.
+     *
+     * @param polygon The polygon the user clicked on.
+     */
+    void onPolygonClick(@NonNull Polygon polygon);
+  }
+
+  /**
+   * Interface definition for a callback to be invoked when the user clicks on a polyline.
+   *
+   * @see MapboxMap#setOnPolylineClickListener(OnPolylineClickListener)
+   */
+  public interface OnPolylineClickListener {
+    /**
+     * Called when the user clicks on a polyline.
+     *
+     * @param polyline The polyline the user clicked on.
+     */
+    void onPolylineClick(@NonNull Polyline polyline);
+  }
+
+  /**
    * Interface definition for a callback to be invoked when the user clicks on an info window.
    *
    * @see MapboxMap#setOnInfoWindowClickListener(OnInfoWindowClickListener)
@@ -2405,11 +2501,13 @@ public final class MapboxMap {
   }
 
   /**
-   * Interface definintion for a callback to be invoked when the style has finished loading.
+   * Interface definition for a callback to be invoked when the style has finished loading.
    */
   public interface OnStyleLoadedListener {
     /**
-     * Invoked when the style has finished loading.
+     * Invoked when the style has finished loading
+     *
+     * @param style the style that has been loaded
      */
     void onStyleLoaded(String style);
   }

@@ -18,13 +18,10 @@ public:
                 bool needsRelayout,
                 const TileParameters&) final;
 
-    void startRender(algorithm::ClipIDGenerator&,
-                     const mat4& projMatrix,
-                     const mat4& clipMatrix,
-                     const TransformState&) final;
-    void finishRender(Painter&) final;
+    void startRender(PaintParameters&) final;
+    void finishRender(PaintParameters&) final;
 
-    std::map<UnwrappedTileID, RenderTile>& getRenderTiles() final;
+    std::vector<std::reference_wrapper<RenderTile>> getRenderTiles() final;
 
     std::unordered_map<std::string, std::vector<Feature>>
     queryRenderedFeatures(const ScreenLineString& geometry,
@@ -35,7 +32,6 @@ public:
     std::vector<Feature>
     querySourceFeatures(const SourceQueryOptions&) const final;
 
-    void setCacheSize(size_t) final;
     void onLowMemory() final;
     void dumpDebugLogs() const final;
 

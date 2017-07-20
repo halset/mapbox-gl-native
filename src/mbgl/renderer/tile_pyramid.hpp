@@ -18,7 +18,7 @@
 
 namespace mbgl {
 
-class Painter;
+class PaintParameters;
 class TransformState;
 class RenderTile;
 class RenderStyle;
@@ -42,12 +42,10 @@ public:
                 Range<uint8_t> zoomRange,
                 std::function<std::unique_ptr<Tile> (const OverscaledTileID&)> createTile);
 
-    void startRender(const mat4& projMatrix,
-                     const mat4& clipMatrix,
-                     const TransformState&);
-    void finishRender(Painter&);
+    void startRender(PaintParameters&);
+    void finishRender(PaintParameters&);
 
-    std::map<UnwrappedTileID, RenderTile>& getRenderTiles();
+    std::vector<std::reference_wrapper<RenderTile>> getRenderTiles();
 
     std::unordered_map<std::string, std::vector<Feature>>
     queryRenderedFeatures(const ScreenLineString& geometry,
@@ -70,7 +68,7 @@ public:
     std::map<OverscaledTileID, std::unique_ptr<Tile>> tiles;
     TileCache cache;
 
-    std::map<UnwrappedTileID, RenderTile> renderTiles;
+    std::vector<RenderTile> renderTiles;
 
     TileObserver* observer = nullptr;
 };

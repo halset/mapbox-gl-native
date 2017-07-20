@@ -1,5 +1,6 @@
 #include <mbgl/renderer/sources/render_geojson_source.hpp>
 #include <mbgl/renderer/render_tile.hpp>
+#include <mbgl/renderer/paint_parameters.hpp>
 #include <mbgl/tile/geojson_tile.hpp>
 
 #include <mbgl/algorithm/generate_clip_ids.hpp>
@@ -58,16 +59,16 @@ void RenderGeoJSONSource::update(Immutable<style::Source::Impl> baseImpl_,
                        });
 }
 
-void RenderGeoJSONSource::startRender(algorithm::ClipIDGenerator& generator, const mat4& projMatrix, const mat4& clipMatrix, const TransformState& transform) {
-    generator.update(tilePyramid.getRenderTiles());
-    tilePyramid.startRender(projMatrix, clipMatrix, transform);
+void RenderGeoJSONSource::startRender(PaintParameters& parameters) {
+    parameters.clipIDGenerator.update(tilePyramid.getRenderTiles());
+    tilePyramid.startRender(parameters);
 }
 
-void RenderGeoJSONSource::finishRender(Painter& painter) {
-    tilePyramid.finishRender(painter);
+void RenderGeoJSONSource::finishRender(PaintParameters& parameters) {
+    tilePyramid.finishRender(parameters);
 }
 
-std::map<UnwrappedTileID, RenderTile>& RenderGeoJSONSource::getRenderTiles() {
+std::vector<std::reference_wrapper<RenderTile>> RenderGeoJSONSource::getRenderTiles() {
     return tilePyramid.getRenderTiles();
 }
 
@@ -81,10 +82,6 @@ RenderGeoJSONSource::queryRenderedFeatures(const ScreenLineString& geometry,
 
 std::vector<Feature> RenderGeoJSONSource::querySourceFeatures(const SourceQueryOptions& options) const {
     return tilePyramid.querySourceFeatures(options);
-}
-
-void RenderGeoJSONSource::setCacheSize(size_t size) {
-    tilePyramid.setCacheSize(size);
 }
 
 void RenderGeoJSONSource::onLowMemory() {

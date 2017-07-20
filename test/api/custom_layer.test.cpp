@@ -2,13 +2,16 @@
 
 #include <mbgl/gl/gl.hpp>
 #include <mbgl/map/map.hpp>
-#include <mbgl/map/backend_scope.hpp>
+#include <mbgl/renderer/backend_scope.hpp>
 #include <mbgl/gl/headless_backend.hpp>
 #include <mbgl/gl/offscreen_view.hpp>
 #include <mbgl/util/default_thread_pool.hpp>
 #include <mbgl/storage/default_file_source.hpp>
+#include <mbgl/renderer/renderer.hpp>
+#include <mbgl/style/style.hpp>
 #include <mbgl/style/layers/custom_layer.hpp>
 #include <mbgl/style/layers/fill_layer.hpp>
+#include <mbgl/test/stub_renderer_frontend.hpp>
 #include <mbgl/util/io.hpp>
 #include <mbgl/util/mat4.hpp>
 #include <mbgl/util/run_loop.hpp>
@@ -86,16 +89,18 @@ public:
 TEST(CustomLayer, Basic) {
     util::RunLoop loop;
 
-    HeadlessBackend backend { test::sharedDisplay() };
+    HeadlessBackend backend;
     BackendScope scope { backend };
     OffscreenView view { backend.getContext() };
     DefaultFileSource fileSource(":memory:", "test/fixtures/api/assets");
     ThreadPool threadPool(4);
-
-    Map map(backend, view.getSize(), 1, fileSource, threadPool, MapMode::Still);
-    map.setStyleJSON(util::read_file("test/fixtures/api/water.json"));
+    float pixelRatio { 1 };
+    StubRendererFrontend rendererFrontend { std::make_unique<Renderer>(backend, pixelRatio, fileSource, threadPool), view };
+    Map map(rendererFrontend, MapObserver::nullObserver(), view.getSize(), pixelRatio, fileSource,
+            threadPool, MapMode::Still);
+    map.getStyle().loadJSON(util::read_file("test/fixtures/api/water.json"));
     map.setLatLngZoom({ 37.8, -122.5 }, 10);
-    map.addLayer(std::make_unique<CustomLayer>(
+    map.getStyle().addLayer(std::make_unique<CustomLayer>(
         "custom",
         [] (void* context) {
             reinterpret_cast<TestLayer*>(context)->initialize();
@@ -110,7 +115,8 @@ TEST(CustomLayer, Basic) {
     auto layer = std::make_unique<FillLayer>("landcover", "mapbox");
     layer->setSourceLayer("landcover");
     layer->setFillColor(Color{ 1.0, 1.0, 0.0, 1.0 });
-    map.addLayer(std::move(layer));
+    map.getStyle().addLayer(std::move(layer));
 
     test::checkImage("test/fixtures/custom_layer/basic", test::render(map, view), 0.0006, 0.1);
+
 }

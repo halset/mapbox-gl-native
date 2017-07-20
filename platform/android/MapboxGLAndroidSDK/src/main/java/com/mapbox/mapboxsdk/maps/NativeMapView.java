@@ -1,11 +1,9 @@
 package com.mapbox.mapboxsdk.maps;
 
-import android.app.ActivityManager;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.PointF;
 import android.graphics.RectF;
-import android.os.Build;
 import android.support.annotation.IntRange;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -30,16 +28,15 @@ import com.mapbox.mapboxsdk.style.layers.Layer;
 import com.mapbox.mapboxsdk.style.light.Light;
 import com.mapbox.mapboxsdk.style.sources.CannotAddSourceException;
 import com.mapbox.mapboxsdk.style.sources.Source;
+import com.mapbox.mapboxsdk.utils.BitmapUtils;
 import com.mapbox.services.commons.geojson.Feature;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import timber.log.Timber;
-
 
 // Class that wraps the native methods for convenience
 final class NativeMapView {
@@ -59,9 +56,6 @@ final class NativeMapView {
   // Device density
   private final float pixelRatio;
 
-  // Listeners for Map change events
-  private CopyOnWriteArrayList<MapView.OnMapChangedListener> onMapChangedListeners;
-
   // Listener invoked to return a bitmap of the map
   private MapboxMap.SnapshotReadyCallback snapshotReadyCallback;
 
@@ -78,27 +72,10 @@ final class NativeMapView {
     fileSource = FileSource.getInstance(context);
 
     pixelRatio = context.getResources().getDisplayMetrics().density;
-    int availableProcessors = Runtime.getRuntime().availableProcessors();
-    ActivityManager.MemoryInfo memoryInfo = new ActivityManager.MemoryInfo();
-    ActivityManager activityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-    activityManager.getMemoryInfo(memoryInfo);
-    long totalMemory = memoryInfo.availMem;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-      totalMemory = memoryInfo.totalMem;
-    }
-
-    if (availableProcessors < 0) {
-      throw new IllegalArgumentException("availableProcessors cannot be negative.");
-    }
-
-    if (totalMemory < 0) {
-      throw new IllegalArgumentException("totalMemory cannot be negative.");
-    }
-    onMapChangedListeners = new CopyOnWriteArrayList<>();
     this.mapView = mapView;
 
     String programCacheDir = context.getCacheDir().getAbsolutePath();
-    nativeInitialize(this, fileSource, pixelRatio, programCacheDir, availableProcessors, totalMemory);
+    nativeInitialize(this, fileSource, pixelRatio, programCacheDir);
   }
 
   //
@@ -118,34 +95,6 @@ final class NativeMapView {
     nativeDestroy();
     mapView = null;
     destroyed = true;
-  }
-
-  public void initializeDisplay() {
-    if (isDestroyedOn("initializeDisplay")) {
-      return;
-    }
-    nativeInitializeDisplay();
-  }
-
-  public void terminateDisplay() {
-    if (isDestroyedOn("terminateDisplay")) {
-      return;
-    }
-    nativeTerminateDisplay();
-  }
-
-  public void initializeContext() {
-    if (isDestroyedOn("initializeContext")) {
-      return;
-    }
-    nativeInitializeContext();
-  }
-
-  public void terminateContext() {
-    if (isDestroyedOn("terminateContext")) {
-      return;
-    }
-    nativeTerminateContext();
   }
 
   public void createSurface(Surface surface) {
@@ -689,6 +638,20 @@ final class NativeMapView {
     return nativeGetCameraPosition();
   }
 
+  public void setPrefetchesTiles(boolean enable) {
+    if (isDestroyedOn("setPrefetchesTiles")) {
+      return;
+    }
+    nativeSetPrefetchesTiles(enable);
+  }
+
+  public boolean getPrefetchesTiles() {
+    if (isDestroyedOn("getPrefetchesTiles")) {
+      return false;
+    }
+    return nativeGetPrefetchesTiles();
+  }
+
   // Runtime style Api
 
   public long getTransitionDuration() {
@@ -905,24 +868,26 @@ final class NativeMapView {
   }
 
   protected void onMapChanged(int rawChange) {
-    if (onMapChangedListeners != null) {
-      for (MapView.OnMapChangedListener onMapChangedListener : onMapChangedListeners) {
-        try {
-          onMapChangedListener.onMapChanged(rawChange);
-        } catch (RuntimeException err) {
-          Timber.e("Exception (%s) in MapView.OnMapChangedListener: %s", err.getClass(), err.getMessage());
-        }
-      }
+    if (mapView != null) {
+      mapView.onMapChange(rawChange);
     }
   }
 
   protected void onFpsChanged(double fps) {
+    if (isDestroyedOn("OnFpsChanged")) {
+      return;
+    }
     mapView.onFpsChanged(fps);
   }
 
-  protected void onSnapshotReady(Bitmap bitmap) {
-    if (snapshotReadyCallback != null && bitmap != null) {
-      snapshotReadyCallback.onSnapshotReady(bitmap);
+  protected void onSnapshotReady(Bitmap mapContent) {
+    if (isDestroyedOn("OnSnapshotReady")) {
+      return;
+    }
+
+    Bitmap viewContent = BitmapUtils.createBitmapFromView(mapView);
+    if (snapshotReadyCallback != null && mapContent != null && viewContent != null) {
+      snapshotReadyCallback.onSnapshotReady(BitmapUtils.mergeBitmap(mapContent, viewContent));
     }
   }
 
@@ -933,9 +898,7 @@ final class NativeMapView {
   private native void nativeInitialize(NativeMapView nativeMapView,
                                        FileSource fileSource,
                                        float pixelRatio,
-                                       String programCacheDir,
-                                       int availableProcessors,
-                                       long totalMemory);
+                                       String programCacheDir);
 
   private native void nativeDestroy();
 
@@ -1123,6 +1086,10 @@ final class NativeMapView {
 
   private native Light nativeGetLight();
 
+  private native void nativeSetPrefetchesTiles(boolean enable);
+
+  private native boolean nativeGetPrefetchesTiles();
+
   int getWidth() {
     if (isDestroyedOn("")) {
       return 0;
@@ -1142,11 +1109,11 @@ final class NativeMapView {
   //
 
   void addOnMapChangedListener(@NonNull MapView.OnMapChangedListener listener) {
-    onMapChangedListeners.add(listener);
+    mapView.addOnMapChangedListener(listener);
   }
 
   void removeOnMapChangedListener(@NonNull MapView.OnMapChangedListener listener) {
-    onMapChangedListeners.remove(listener);
+    mapView.removeOnMapChangedListener(listener);
   }
 
   //

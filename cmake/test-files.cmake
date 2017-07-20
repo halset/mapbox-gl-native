@@ -19,9 +19,6 @@ set(MBGL_TEST_FILES
     test/api/render_missing.test.cpp
     test/api/repeated_render.test.cpp
 
-    # geometry
-    test/geometry/binpack.test.cpp
-
     # gl
     test/gl/bucket.test.cpp
     test/gl/object.test.cpp
@@ -31,6 +28,7 @@ set(MBGL_TEST_FILES
 
     # map
     test/map/map.test.cpp
+    test/map/prefetch.test.cpp
     test/map/transform.test.cpp
 
     # math
@@ -40,12 +38,14 @@ set(MBGL_TEST_FILES
 
     # programs
     test/programs/binary_program.test.cpp
+    test/programs/symbol_program.test.cpp
 
     # renderer
+    test/renderer/backend_scope.test.cpp
     test/renderer/group_by_layout.test.cpp
+    test/renderer/image_manager.test.cpp
 
     # sprite
-    test/sprite/sprite_atlas.test.cpp
     test/sprite/sprite_loader.test.cpp
     test/sprite/sprite_parser.test.cpp
 
@@ -61,6 +61,8 @@ set(MBGL_TEST_FILES
     test/src/mbgl/test/stub_geometry_tile_feature.hpp
     test/src/mbgl/test/stub_layer_observer.hpp
     test/src/mbgl/test/stub_render_source_observer.hpp
+    test/src/mbgl/test/stub_renderer_frontend.cpp
+    test/src/mbgl/test/stub_renderer_frontend.hpp
     test/src/mbgl/test/stub_style_observer.hpp
     test/src/mbgl/test/stub_tile_observer.hpp
     test/src/mbgl/test/test.cpp
@@ -106,7 +108,7 @@ set(MBGL_TEST_FILES
     test/style/style_parser.test.cpp
 
     # text
-    test/text/glyph_atlas.test.cpp
+    test/text/glyph_loader.test.cpp
     test/text/glyph_pbf.test.cpp
     test/text/quads.test.cpp
 
@@ -121,6 +123,7 @@ set(MBGL_TEST_FILES
 
     # util
     test/util/async_task.test.cpp
+    test/util/dtoa.test.cpp
     test/util/geo.test.cpp
     test/util/http_timeout.test.cpp
     test/util/image.test.cpp

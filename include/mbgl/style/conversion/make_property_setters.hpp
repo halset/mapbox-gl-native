@@ -45,6 +45,7 @@ auto makeLayoutPropertySetters() {
     result["icon-padding"] = &setProperty<V, SymbolLayer, PropertyValue<float>, &SymbolLayer::setIconPadding>;
     result["icon-keep-upright"] = &setProperty<V, SymbolLayer, PropertyValue<bool>, &SymbolLayer::setIconKeepUpright>;
     result["icon-offset"] = &setProperty<V, SymbolLayer, DataDrivenPropertyValue<std::array<float, 2>>, &SymbolLayer::setIconOffset>;
+    result["icon-pitch-alignment"] = &setProperty<V, SymbolLayer, PropertyValue<AlignmentType>, &SymbolLayer::setIconPitchAlignment>;
     result["text-pitch-alignment"] = &setProperty<V, SymbolLayer, PropertyValue<AlignmentType>, &SymbolLayer::setTextPitchAlignment>;
     result["text-rotation-alignment"] = &setProperty<V, SymbolLayer, PropertyValue<AlignmentType>, &SymbolLayer::setTextRotationAlignment>;
     result["text-field"] = &setProperty<V, SymbolLayer, DataDrivenPropertyValue<std::string>, &SymbolLayer::setTextField>;
@@ -99,7 +100,7 @@ auto makePaintPropertySetters() {
     result["line-translate-transition"] = &setTransition<V, LineLayer, &LineLayer::setLineTranslateTransition>;
     result["line-translate-anchor"] = &setProperty<V, LineLayer, PropertyValue<TranslateAnchorType>, &LineLayer::setLineTranslateAnchor>;
     result["line-translate-anchor-transition"] = &setTransition<V, LineLayer, &LineLayer::setLineTranslateAnchorTransition>;
-    result["line-width"] = &setProperty<V, LineLayer, PropertyValue<float>, &LineLayer::setLineWidth>;
+    result["line-width"] = &setProperty<V, LineLayer, DataDrivenPropertyValue<float>, &LineLayer::setLineWidth>;
     result["line-width-transition"] = &setTransition<V, LineLayer, &LineLayer::setLineWidthTransition>;
     result["line-gap-width"] = &setProperty<V, LineLayer, DataDrivenPropertyValue<float>, &LineLayer::setLineGapWidth>;
     result["line-gap-width-transition"] = &setTransition<V, LineLayer, &LineLayer::setLineGapWidthTransition>;
@@ -155,6 +156,8 @@ auto makePaintPropertySetters() {
     result["circle-translate-anchor-transition"] = &setTransition<V, CircleLayer, &CircleLayer::setCircleTranslateAnchorTransition>;
     result["circle-pitch-scale"] = &setProperty<V, CircleLayer, PropertyValue<CirclePitchScaleType>, &CircleLayer::setCirclePitchScale>;
     result["circle-pitch-scale-transition"] = &setTransition<V, CircleLayer, &CircleLayer::setCirclePitchScaleTransition>;
+    result["circle-pitch-alignment"] = &setProperty<V, CircleLayer, PropertyValue<AlignmentType>, &CircleLayer::setCirclePitchAlignment>;
+    result["circle-pitch-alignment-transition"] = &setTransition<V, CircleLayer, &CircleLayer::setCirclePitchAlignmentTransition>;
     result["circle-stroke-width"] = &setProperty<V, CircleLayer, DataDrivenPropertyValue<float>, &CircleLayer::setCircleStrokeWidth>;
     result["circle-stroke-width-transition"] = &setTransition<V, CircleLayer, &CircleLayer::setCircleStrokeWidthTransition>;
     result["circle-stroke-color"] = &setProperty<V, CircleLayer, DataDrivenPropertyValue<Color>, &CircleLayer::setCircleStrokeColor>;

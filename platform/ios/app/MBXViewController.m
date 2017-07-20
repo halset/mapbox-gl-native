@@ -52,7 +52,8 @@ typedef NS_ENUM(NSInteger, MBXSettingsAnnotationsRows) {
 };
 
 typedef NS_ENUM(NSInteger, MBXSettingsRuntimeStylingRows) {
-    MBXSettingsRuntimeStylingWater = 0,
+    MBXSettingsRuntimeStylingBuildingExtrusions = 0,
+    MBXSettingsRuntimeStylingWater,
     MBXSettingsRuntimeStylingRoads,
     MBXSettingsRuntimeStylingRaster,
     MBXSettingsRuntimeStylingShape,
@@ -71,6 +72,7 @@ typedef NS_ENUM(NSInteger, MBXSettingsRuntimeStylingRows) {
     MBXSettingsRuntimeStylingUpdateShapeSourceFeatures,
     MBXSettingsRuntimeStylingVectorSource,
     MBXSettingsRuntimeStylingRasterSource,
+    MBXSettingsRuntimeStylingImageSource,
     MBXSettingsRuntimeStylingCountryLabels,
     MBXSettingsRuntimeStylingRouteLine,
     MBXSettingsRuntimeStylingDDSPolygon,
@@ -324,6 +326,7 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
             break;
         case MBXSettingsRuntimeStyling:
             [settingsTitles addObjectsFromArray:@[
+                @"Add Building Extrusions",
                 @"Style Water With Function",
                 @"Style Roads With Function",
                 @"Add Raster & Apply Function",
@@ -343,6 +346,7 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
                 @"Update Shape Source: Features",
                 @"Style Vector Source",
                 @"Style Raster Source",
+                @"Style Image Source",
                 [NSString stringWithFormat:@"Label Countries in %@", (_usingLocaleBasedCountryLabels ? @"Local Language" : [[NSLocale currentLocale] displayNameForKey:NSLocaleIdentifier value:[self bestLanguageForUser]])],
                 @"Add Route Line",
                 @"Dynamically Style Polygon",
@@ -523,6 +527,9 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
         case MBXSettingsRuntimeStyling:
             switch (indexPath.row)
             {
+                case MBXSettingsRuntimeStylingBuildingExtrusions:
+                    [self styleBuildingExtrusions];
+                    break;
                 case MBXSettingsRuntimeStylingWater:
                     [self styleWaterLayer];
                     break;
@@ -579,6 +586,9 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
                     break;
                 case MBXSettingsRuntimeStylingRasterSource:
                     [self styleRasterSource];
+                    break;
+                case MBXSettingsRuntimeStylingImageSource:
+                    [self styleImageSource];
                     break;
                 case MBXSettingsRuntimeStylingCountryLabels:
                     [self styleCountryLabelsLanguage];
@@ -858,6 +868,38 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
     [self.mapView addAnnotations:annotations];
 
     [self.mapView showAnnotations:annotations animated:YES];
+}
+
+- (void)styleBuildingExtrusions
+{
+    MGLSource* source = [self.mapView.style sourceWithIdentifier:@"composite"];
+    if (source) {
+
+        MGLFillExtrusionStyleLayer* layer = [[MGLFillExtrusionStyleLayer alloc] initWithIdentifier:@"extrudedBuildings" source:source];
+        layer.sourceLayerIdentifier = @"building";
+        layer.predicate = [NSPredicate predicateWithFormat:@"extrude == 'true' AND height > 0"];
+        layer.fillExtrusionBase = [MGLStyleValue valueWithInterpolationMode:MGLInterpolationModeIdentity sourceStops:nil attributeName:@"min_height" options:nil];
+        layer.fillExtrusionHeight = [MGLStyleValue valueWithInterpolationMode:MGLInterpolationModeIdentity sourceStops:nil attributeName:@"height" options:nil];
+
+        // Set the fill color to that of the existing building footprint layer, if it exists.
+        MGLFillStyleLayer* buildingLayer = (MGLFillStyleLayer*)[self.mapView.style layerWithIdentifier:@"building"];
+        if (buildingLayer) {
+            if (buildingLayer.fillColor) {
+                layer.fillExtrusionColor = buildingLayer.fillColor;
+            } else {
+                layer.fillExtrusionColor = [MGLStyleValue valueWithRawValue:[UIColor whiteColor]];
+            }
+
+            layer.fillExtrusionOpacity = [MGLStyleValue<NSNumber *> valueWithRawValue:@0.75];
+        }
+
+        MGLStyleLayer* labelLayer = [self.mapView.style layerWithIdentifier:@"waterway-label"];
+        if (labelLayer) {
+            [self.mapView.style insertLayer:layer belowLayer:labelLayer];
+        } else {
+            [self.mapView.style addLayer:layer];
+        }
+    }
 }
 
 - (void)styleWaterLayer
@@ -1269,6 +1311,39 @@ typedef NS_ENUM(NSInteger, MBXSettingsMiscellaneousRows) {
 
     MGLRasterStyleLayer *rasterLayer = [[MGLRasterStyleLayer alloc] initWithIdentifier:@"style-raster-layer-id" source:rasterSource];
     [self.mapView.style addLayer:rasterLayer];
+}
+
+- (void)styleImageSource
+{
+    MGLCoordinateQuad coordinateQuad = {
+        { 46.437, -80.425 },
+        { 37.936, -80.425 },
+        { 37.936, -71.516 },
+        { 46.437, -71.516 } };
+
+    MGLImageSource *imageSource = [[MGLImageSource alloc] initWithIdentifier:@"style-image-source-id" coordinateQuad:coordinateQuad URL:[NSURL URLWithString:@"https://www.mapbox.com/mapbox-gl-js/assets/radar0.gif"]];
+
+    [self.mapView.style addSource:imageSource];
+    
+    MGLRasterStyleLayer *rasterLayer = [[MGLRasterStyleLayer alloc] initWithIdentifier:@"style-raster-image-layer-id" source:imageSource];
+    [self.mapView.style addLayer:rasterLayer];
+    
+    [NSTimer scheduledTimerWithTimeInterval:1.0
+                                     target:self
+                                   selector:@selector(updateAnimatedImageSource:)
+                                   userInfo:imageSource
+                                    repeats:YES];
+}
+
+
+- (void)updateAnimatedImageSource:(NSTimer *)timer {
+    static int radarSuffix = 0;
+    MGLImageSource *imageSource = (MGLImageSource *)timer.userInfo;
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"https://www.mapbox.com/mapbox-gl-js/assets/radar%d.gif", radarSuffix++]];
+    [imageSource setValue:url forKey:@"URL"];
+    if (radarSuffix > 3) {
+        radarSuffix = 0;
+    }
 }
 
 -(void)styleCountryLabelsLanguage
