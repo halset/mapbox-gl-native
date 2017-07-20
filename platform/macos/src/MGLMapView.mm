@@ -4,6 +4,7 @@
 #import "MGLCompassCell.h"
 #import "MGLOpenGLLayer.h"
 #import "MGLStyle.h"
+#import "MGLRendererFrontend.h"
 
 #import "MGLAnnotationImage_Private.h"
 #import "MGLAttributionInfo_Private.h"
@@ -20,16 +21,19 @@
 #import "MGLPolyline.h"
 #import "MGLAnnotationImage.h"
 #import "MGLMapViewDelegate.h"
+#import "MGLImageSource.h"
 
 #import <mbgl/map/map.hpp>
 #import <mbgl/map/view.hpp>
+#import <mbgl/style/style.hpp>
 #import <mbgl/annotation/annotation.hpp>
 #import <mbgl/map/camera.hpp>
 #import <mbgl/storage/reachability.h>
 #import <mbgl/util/default_thread_pool.hpp>
-#import <mbgl/map/backend.hpp>
-#import <mbgl/map/backend_scope.hpp>
 #import <mbgl/style/image.hpp>
+#import <mbgl/renderer/renderer.hpp>
+#import <mbgl/renderer/renderer_backend.hpp>
+#import <mbgl/renderer/backend_scope.hpp>
 #import <mbgl/storage/default_file_source.hpp>
 #import <mbgl/storage/network_status.hpp>
 #import <mbgl/math/wrap.hpp>
@@ -153,6 +157,7 @@ public:
     /// Cross-platform map view controller.
     mbgl::Map *_mbglMap;
     MGLMapViewImpl *_mbglView;
+    std::unique_ptr<MGLRenderFrontend> _rendererFrontend;
     std::shared_ptr<mbgl::ThreadPool> _mbglThreadPool;
 
     NSPanGestureRecognizer *_panGestureRecognizer;
@@ -238,7 +243,7 @@ public:
 
     // If the Style URL inspectable was not set, make sure to go through
     // -setStyleURL: to load the default style.
-    if (_mbglMap->getStyleURL().empty()) {
+    if (_mbglMap->getStyle().getURL().empty()) {
         self.styleURL = nil;
     }
 }
@@ -268,8 +273,10 @@ public:
     mbgl::DefaultFileSource* mbglFileSource = [MGLOfflineStorage sharedOfflineStorage].mbglFileSource;
 
     _mbglThreadPool = mbgl::sharedThreadPool();
-    _mbglMap = new mbgl::Map(*_mbglView, self.size, [NSScreen mainScreen].backingScaleFactor, *mbglFileSource, *_mbglThreadPool, mbgl::MapMode::Continuous, mbgl::GLContextMode::Unique, mbgl::ConstrainMode::None, mbgl::ViewportMode::Default);
-    [self validateTileCacheSize];
+
+    auto renderer = std::make_unique<mbgl::Renderer>(*_mbglView, [NSScreen mainScreen].backingScaleFactor, *mbglFileSource, *_mbglThreadPool, mbgl::GLContextMode::Unique);
+    _rendererFrontend = std::make_unique<MGLRenderFrontend>(std::move(renderer), self, _mbglView, true);
+    _mbglMap = new mbgl::Map(*_rendererFrontend, *_mbglView, self.size, [NSScreen mainScreen].backingScaleFactor, *mbglFileSource, *_mbglThreadPool, mbgl::MapMode::Continuous, mbgl::ConstrainMode::None, mbgl::ViewportMode::Default);
 
     // Install the OpenGL layer. Interface Builder’s synchronous drawing means
     // we can’t display a map, so don’t even bother to have a map layer.
@@ -606,7 +613,7 @@ public:
 }
 
 - (nonnull NSURL *)styleURL {
-    NSString *styleURLString = @(_mbglMap->getStyleURL().c_str()).mgl_stringOrNilIfEmpty;
+    NSString *styleURLString = @(_mbglMap->getStyle().getURL().c_str()).mgl_stringOrNilIfEmpty;
     return styleURLString ? [NSURL URLWithString:styleURLString] : [MGLStyle streetsStyleURLWithVersion:MGLStyleDefaultVersion];
 }
 
@@ -628,17 +635,21 @@ public:
 
     styleURL = styleURL.mgl_URLByStandardizingScheme;
     self.style = nil;
-    _mbglMap->setStyleURL(styleURL.absoluteString.UTF8String);
+    _mbglMap->getStyle().loadURL(styleURL.absoluteString.UTF8String);
 }
 
 - (IBAction)reloadStyle:(__unused id)sender {
     NSURL *styleURL = self.styleURL;
-    _mbglMap->setStyleURL("");
+    _mbglMap->getStyle().loadURL("");
     self.styleURL = styleURL;
 }
 
 - (mbgl::Map *)mbglMap {
     return _mbglMap;
+}
+
+- (mbgl::Renderer *)renderer {
+    return _rendererFrontend->getRenderer();
 }
 
 #pragma mark View hierarchy and drawing
@@ -685,9 +696,6 @@ public:
 
 - (void)setFrame:(NSRect)frame {
     super.frame = frame;
-    if (!NSEqualRects(frame, self.frame)) {
-        [self validateTileCacheSize];
-    }
     if (!_isTargetingInterfaceBuilder) {
         _mbglMap->setSize(self.size);
     }
@@ -771,11 +779,8 @@ public:
 }
 
 - (void)renderSync {
-    if (!self.dormant) {
-        // The OpenGL implementation automatically enables the OpenGL context for us.
-        mbgl::BackendScope scope { *_mbglView, mbgl::BackendScope::ScopeType::Implicit };
-
-        _mbglMap->render(*_mbglView);
+    if (!self.dormant && _rendererFrontend) {
+        _rendererFrontend->render();
 
         if (_isPrinting) {
             _isPrinting = NO;
@@ -785,21 +790,6 @@ public:
 
 //        [self updateUserLocationAnnotationView];
     }
-}
-
-- (void)validateTileCacheSize {
-    if (!_mbglMap) {
-        return;
-    }
-
-    CGFloat zoomFactor   = self.maximumZoomLevel - self.minimumZoomLevel + 1;
-    CGFloat cpuFactor    = [NSProcessInfo processInfo].processorCount;
-    CGFloat memoryFactor = (CGFloat)[NSProcessInfo processInfo].physicalMemory / 1000 / 1000 / 1000;
-    CGFloat sizeFactor   = (NSWidth(self.bounds) / mbgl::util::tileSize) * (NSHeight(self.bounds) / mbgl::util::tileSize);
-
-    NSUInteger cacheSize = zoomFactor * cpuFactor * memoryFactor * sizeFactor * 0.5;
-
-    _mbglMap->setSourceTileCacheSize(cacheSize);
 }
 
 - (void)setNeedsGLDisplay {
@@ -936,20 +926,23 @@ public:
         return;
     }
 
-    self.style = [[MGLStyle alloc] initWithMapView:self];
+    self.style = [[MGLStyle alloc] initWithRawStyle:&_mbglMap->getStyle() mapView:self];
     if ([self.delegate respondsToSelector:@selector(mapView:didFinishLoadingStyle:)])
     {
         [self.delegate mapView:self didFinishLoadingStyle:self.style];
     }
 }
 
-- (void)sourceDidChange {
+- (void)sourceDidChange:(MGLSource *)source {
     if (!_mbglMap) {
         return;
     }
-
-    [self installAttributionView];
+    // Attribution only applies to tiled sources
+    if ([source isKindOfClass:[MGLTileSource class]]) {
+        [self installAttributionView];
+    }
     self.needsUpdateConstraints = YES;
+    self.needsDisplay = YES;
 }
 
 #pragma mark Printing
@@ -1056,13 +1049,11 @@ public:
 - (void)setMinimumZoomLevel:(double)minimumZoomLevel
 {
     _mbglMap->setMinZoom(minimumZoomLevel);
-    [self validateTileCacheSize];
 }
 
 - (void)setMaximumZoomLevel:(double)maximumZoomLevel
 {
     _mbglMap->setMaxZoom(maximumZoomLevel);
-    [self validateTileCacheSize];
 }
 
 - (double)maximumZoomLevel {
@@ -1369,7 +1360,7 @@ public:
             // Move the cursor back to the start point and show it again, creating
             // the illusion that it has stayed in place during the entire gesture.
             CGPoint cursorPoint = [self convertPoint:startPoint toView:nil];
-            cursorPoint = [self.window convertRectToScreen:{ startPoint, NSZeroSize }].origin;
+            cursorPoint = [self.window convertRectToScreen:{ cursorPoint, NSZeroSize }].origin;
             cursorPoint.y = self.window.screen.frame.size.height - cursorPoint.y;
             CGDisplayMoveCursorToPoint(kCGDirectMainDisplay, cursorPoint);
             CGDisplayShowCursor(kCGDirectMainDisplay);
@@ -2139,7 +2130,7 @@ public:
 /// Returns the tags of the annotations coincident with the given rectangle.
 - (std::vector<MGLAnnotationTag>)annotationTagsInRect:(NSRect)rect {
     // Cocoa origin is at the lower-left corner.
-    return _mbglMap->queryPointAnnotations({
+    return self.renderer->queryPointAnnotations({
         { NSMinX(rect), NSHeight(self.bounds) - NSMaxY(rect) },
         { NSMaxX(rect), NSHeight(self.bounds) - NSMinY(rect) },
     });
@@ -2560,7 +2551,7 @@ public:
         optionalFilter = predicate.mgl_filter;
     }
     
-    std::vector<mbgl::Feature> features = _mbglMap->queryRenderedFeatures(screenCoordinate, { optionalLayerIDs, optionalFilter });
+    std::vector<mbgl::Feature> features = _rendererFrontend->getRenderer()->queryRenderedFeatures(screenCoordinate, { optionalLayerIDs, optionalFilter });
     return MGLFeaturesFromMBGLFeatures(features);
 }
 
@@ -2594,7 +2585,7 @@ public:
         optionalFilter = predicate.mgl_filter;
     }
     
-    std::vector<mbgl::Feature> features = _mbglMap->queryRenderedFeatures(screenBox, { optionalLayerIDs, optionalFilter });
+    std::vector<mbgl::Feature> features = _rendererFrontend->getRenderer()->queryRenderedFeatures(screenBox, { optionalLayerIDs, optionalFilter });
     return MGLFeaturesFromMBGLFeatures(features);
 }
 
@@ -2772,10 +2763,9 @@ public:
 }
 
 /// Adapter responsible for bridging calls from mbgl to MGLMapView and Cocoa.
-class MGLMapViewImpl : public mbgl::View, public mbgl::Backend {
+class MGLMapViewImpl : public mbgl::View, public mbgl::RendererBackend, public mbgl::MapObserver {
 public:
-    MGLMapViewImpl(MGLMapView *nativeView_)
-        : nativeView(nativeView_) {}
+    MGLMapViewImpl(MGLMapView *nativeView_) : nativeView(nativeView_) {}
 
     void onCameraWillChange(mbgl::MapObserver::CameraChangeMode mode) override {
         bool animated = mode == mbgl::MapObserver::CameraChangeMode::Animated;
@@ -2847,8 +2837,10 @@ public:
         [nativeView mapViewDidFinishLoadingStyle];
     }
 
-    void onSourceChanged(mbgl::style::Source&) override {
-        [nativeView sourceDidChange];
+    void onSourceChanged(mbgl::style::Source& source) override {
+        NSString *identifier = @(source.getID().c_str());
+        MGLSource * nativeSource = [nativeView.style sourceWithIdentifier:identifier];
+        [nativeView sourceDidChange:nativeSource];
     }
 
     mbgl::gl::ProcAddress initializeExtension(const char* name) override {
@@ -2862,10 +2854,6 @@ public:
         CFRelease(str);
 
         return reinterpret_cast<mbgl::gl::ProcAddress>(symbol);
-    }
-
-    void invalidate() override {
-        [nativeView setNeedsGLDisplay];
     }
 
     void activate() override {
@@ -2888,12 +2876,16 @@ public:
     void updateAssumedState() override {
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
         assumeFramebufferBinding(fbo);
-        assumeViewportSize(nativeView.framebufferSize);
+        assumeViewport(0, 0, nativeView.framebufferSize);
+    }
+    
+    mbgl::BackendScope::ScopeType getScopeType() const override {
+        return mbgl::BackendScope::ScopeType::Implicit;
     }
 
     void bind() override {
         setFramebufferBinding(fbo);
-        setViewportSize(nativeView.framebufferSize);
+        setViewport(0, 0, nativeView.framebufferSize);
     }
 
     mbgl::PremultipliedImage readStillImage() {

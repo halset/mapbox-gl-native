@@ -1,5 +1,4 @@
 #include <mbgl/renderer/buckets/line_bucket.hpp>
-#include <mbgl/renderer/painter.hpp>
 #include <mbgl/renderer/layers/render_line_layer.hpp>
 #include <mbgl/renderer/bucket_parameters.hpp>
 #include <mbgl/style/layers/line_layer_impl.hpp>
@@ -458,13 +457,6 @@ void LineBucket::upload(gl::Context& context) {
     uploaded = true;
 }
 
-void LineBucket::render(Painter& painter,
-                        PaintParameters& parameters,
-                        const RenderLayer& layer,
-                        const RenderTile& tile) {
-    painter.renderLine(parameters, *this, *layer.as<RenderLineLayer>(), tile);
-}
-
 bool LineBucket::hasData() const {
     return !segments.empty();
 }
@@ -480,7 +472,7 @@ static float get(const RenderLineLayer& layer, const std::map<std::string, LineP
 }
 
 float LineBucket::getLineWidth(const RenderLineLayer& layer) const {
-    float lineWidth = layer.evaluated.get<LineWidth>();
+    float lineWidth = get<LineWidth>(layer, paintPropertyBinders);
     float gapWidth = get<LineGapWidth>(layer, paintPropertyBinders);
 
     if (gapWidth) {

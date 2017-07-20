@@ -10,9 +10,14 @@
 #import "NSBundle+MGLAdditions.h"
 #import "NSValue+MGLAdditions.h"
 
+#include <mbgl/actor/actor.hpp>
+#include <mbgl/storage/resource_transform.hpp>
+#include <mbgl/util/run_loop.hpp>
 #include <mbgl/util/string.hpp>
 #include <mbgl/storage/resource.hpp>
 #include <mbgl/storage/response.hpp>
+
+#include <memory>
 
 static NSString * const MGLOfflineStorageFileName = @"cache.db";
 static NSString * const MGLOfflineStorageFileName3_2_0_beta_1 = @"offline.db";
@@ -38,7 +43,9 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
 
 @end
 
-@implementation MGLOfflineStorage
+@implementation MGLOfflineStorage {
+    std::unique_ptr<mbgl::Actor<mbgl::ResourceTransform>> _mbglResourceTransform;
+}
 
 + (instancetype)sharedOfflineStorage {
     static dispatch_once_t onceToken;
@@ -76,7 +83,7 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
 - (void)setDelegate:(id<MGLOfflineStorageDelegate>)newValue {
     _delegate = newValue;
     if ([self.delegate respondsToSelector:@selector(offlineStorage:URLForResourceOfKind:withURL:)]) {
-        _mbglFileSource->setResourceTransform([offlineStorage = self](auto kind_, std::string&& url_) -> std::string {
+        _mbglResourceTransform = std::make_unique<mbgl::Actor<mbgl::ResourceTransform>>(*mbgl::util::RunLoop::Get(), [offlineStorage = self](auto kind_, const std::string&& url_) -> std::string {
             NSURL* url =
             [NSURL URLWithString:[[NSString alloc] initWithBytes:url_.data()
                                                           length:url_.length()
@@ -101,6 +108,9 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
                 case mbgl::Resource::Kind::SpriteJSON:
                     kind = MGLResourceKindSpriteJSON;
                     break;
+                case mbgl::Resource::Kind::Image:
+                    kind = MGLResourceKindImage;
+                    break;
                 case mbgl::Resource::Kind::Unknown:
                     kind = MGLResourceKindUnknown;
                     break;
@@ -111,8 +121,11 @@ NSString * const MGLOfflinePackMaximumCountUserInfoKey = MGLOfflinePackUserInfoK
                                                   withURL:url];
             return url.absoluteString.UTF8String;
         });
+
+        _mbglFileSource->setResourceTransform(_mbglResourceTransform->self());
     } else {
-        _mbglFileSource->setResourceTransform(nullptr);
+        _mbglResourceTransform.reset();
+        _mbglFileSource->setResourceTransform({});
     }
 }
 

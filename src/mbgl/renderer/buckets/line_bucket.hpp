@@ -4,7 +4,7 @@
 #include <mbgl/tile/geometry_tile_data.hpp>
 #include <mbgl/gl/vertex_buffer.hpp>
 #include <mbgl/gl/index_buffer.hpp>
-#include <mbgl/gl/segment.hpp>
+#include <mbgl/programs/segment.hpp>
 #include <mbgl/programs/line_program.hpp>
 #include <mbgl/style/layers/line_layer_properties.hpp>
 
@@ -26,7 +26,6 @@ public:
     bool hasData() const override;
 
     void upload(gl::Context&) override;
-    void render(Painter&, PaintParameters&, const RenderLayer&, const RenderTile&) override;
 
     float getQueryRadius(const RenderLayer&) const override;
 
@@ -34,7 +33,7 @@ public:
 
     gl::VertexVector<LineLayoutVertex> vertices;
     gl::IndexVector<gl::Triangles> triangles;
-    gl::SegmentVector<LineAttributes> segments;
+    SegmentVector<LineAttributes> segments;
 
     optional<gl::VertexBuffer<LineLayoutVertex>> vertexBuffer;
     optional<gl::IndexBuffer<gl::Triangles>> indexBuffer;

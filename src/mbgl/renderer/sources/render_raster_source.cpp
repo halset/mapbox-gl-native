@@ -56,15 +56,15 @@ void RenderRasterSource::update(Immutable<style::Source::Impl> baseImpl_,
                        });
 }
 
-void RenderRasterSource::startRender(algorithm::ClipIDGenerator&, const mat4& projMatrix, const mat4& clipMatrix, const TransformState& transform) {
-    tilePyramid.startRender(projMatrix, clipMatrix, transform);
+void RenderRasterSource::startRender(PaintParameters& parameters) {
+    tilePyramid.startRender(parameters);
 }
 
-void RenderRasterSource::finishRender(Painter& painter) {
-    tilePyramid.finishRender(painter);
+void RenderRasterSource::finishRender(PaintParameters& parameters) {
+    tilePyramid.finishRender(parameters);
 }
 
-std::map<UnwrappedTileID, RenderTile>& RenderRasterSource::getRenderTiles() {
+std::vector<std::reference_wrapper<RenderTile>> RenderRasterSource::getRenderTiles() {
     return tilePyramid.getRenderTiles();
 }
 
@@ -73,15 +73,11 @@ RenderRasterSource::queryRenderedFeatures(const ScreenLineString&,
                                           const TransformState&,
                                           const RenderStyle&,
                                           const RenderedQueryOptions&) const {
-    return {};
+    return std::unordered_map<std::string, std::vector<Feature>> {};
 }
 
 std::vector<Feature> RenderRasterSource::querySourceFeatures(const SourceQueryOptions&) const {
     return {};
-}
-
-void RenderRasterSource::setCacheSize(size_t size) {
-    tilePyramid.setCacheSize(size);
 }
 
 void RenderRasterSource::onLowMemory() {

@@ -3,12 +3,15 @@
 #include <mbgl/test/util.hpp>
 
 #include <mbgl/map/map.hpp>
-#include <mbgl/map/backend_scope.hpp>
+#include <mbgl/renderer/backend_scope.hpp>
 #include <mbgl/gl/headless_backend.hpp>
 #include <mbgl/gl/offscreen_view.hpp>
 #include <mbgl/util/default_thread_pool.hpp>
 #include <mbgl/util/io.hpp>
 #include <mbgl/util/run_loop.hpp>
+#include <mbgl/style/style.hpp>
+#include <mbgl/renderer/renderer.hpp>
+#include <mbgl/test/stub_renderer_frontend.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -35,9 +38,9 @@ public:
     }
 
     util::RunLoop runLoop;
-    HeadlessBackend backend { test::sharedDisplay() };
+    HeadlessBackend backend;
     BackendScope scope { backend };
-    OffscreenView view{ backend.getContext(), { 512, 512 } };
+    OffscreenView view { backend.getContext(), { 512, 512 } };
     StubFileSource fileSource;
     ThreadPool threadPool { 4 };
 
@@ -72,19 +75,30 @@ private:
 
 TEST(Memory, Vector) {
     MemoryTest test;
+    float ratio { 2 };
 
-    Map map(test.backend, { 256, 256 }, 2, test.fileSource, test.threadPool, MapMode::Still);
+    StubRendererFrontend rendererFrontend {
+            std::make_unique<Renderer>(test.backend, ratio, test.fileSource, test.threadPool),
+            test.view };
+    Map map(rendererFrontend, MapObserver::nullObserver(), { 256, 256 }, ratio, test.fileSource,
+            test.threadPool, MapMode::Still);
     map.setZoom(16); // more map features
-    map.setStyleURL("mapbox://streets");
+    map.getStyle().loadURL("mapbox://streets");
 
     test::render(map, test.view);
 }
 
 TEST(Memory, Raster) {
     MemoryTest test;
+    float ratio { 2 };
 
-    Map map(test.backend, { 256, 256 }, 2, test.fileSource, test.threadPool, MapMode::Still);
-    map.setStyleURL("mapbox://satellite");
+    StubRendererFrontend rendererFrontend {
+            std::make_unique<Renderer>(test.backend, ratio, test.fileSource, test.threadPool),
+            test.view };
+
+    Map map(rendererFrontend, MapObserver::nullObserver(), { 256, 256 }, ratio, test.fileSource,
+            test.threadPool, MapMode::Still);
+    map.getStyle().loadURL("mapbox://satellite");
 
     test::render(map, test.view);
 }
@@ -115,16 +129,21 @@ TEST(Memory, Footprint) {
     }
     
     MemoryTest test;
+    float ratio { 2 };
 
     auto renderMap = [&](Map& map, const char* style){
         map.setZoom(16);
-        map.setStyleURL(style);
+        map.getStyle().loadURL(style);
         test::render(map, test.view);
     };
 
     // Warm up buffers and cache.
     for (unsigned i = 0; i < 10; ++i) {
-        Map map(test.backend, { 256, 256 }, 2, test.fileSource, test.threadPool, MapMode::Still);
+        StubRendererFrontend rendererFrontend {
+                std::make_unique<Renderer>(test.backend, ratio, test.fileSource, test.threadPool),
+                test.view };
+        Map map(rendererFrontend, MapObserver::nullObserver(), { 256, 256 }, ratio, test.fileSource,
+                test.threadPool, MapMode::Still);
         renderMap(map, "mapbox://streets");
         renderMap(map, "mapbox://satellite");
     };
@@ -133,25 +152,31 @@ TEST(Memory, Footprint) {
     // libuv runloop.
     test.runLoop.runOnce();
 
-    std::vector<std::unique_ptr<Map>> maps;
+    std::vector<std::pair<std::unique_ptr<Map>, std::unique_ptr<RendererFrontend>>> maps;
     unsigned runs = 15;
 
     long vectorInitialRSS = mbgl::test::getCurrentRSS();
     for (unsigned i = 0; i < runs; ++i) {
-        auto vector = std::make_unique<Map>(test.backend, Size{ 256, 256 }, 2, test.fileSource,
+        auto frontend = std::make_unique<StubRendererFrontend>(
+                std::make_unique<Renderer>(test.backend, ratio, test.fileSource, test.threadPool), test.view);
+        auto vector = std::make_unique<Map>(*frontend, MapObserver::nullObserver(),
+                                            Size{ 256, 256 }, ratio, test.fileSource,
                                             test.threadPool, MapMode::Still);
         renderMap(*vector, "mapbox://streets");
-        maps.push_back(std::move(vector));
+        maps.push_back({std::move(vector), std::move(frontend)});
     };
 
     double vectorFootprint = (mbgl::test::getCurrentRSS() - vectorInitialRSS) / double(runs);
 
     long rasterInitialRSS = mbgl::test::getCurrentRSS();
     for (unsigned i = 0; i < runs; ++i) {
-        auto raster = std::make_unique<Map>(test.backend, Size{ 256, 256 }, 2, test.fileSource,
+        auto frontend = std::make_unique<StubRendererFrontend>(
+                std::make_unique<Renderer>(test.backend, ratio, test.fileSource, test.threadPool), test.view);
+        auto raster = std::make_unique<Map>(*frontend, MapObserver::nullObserver(),
+                                            Size{ 256, 256 }, ratio, test.fileSource,
                                             test.threadPool, MapMode::Still);
         renderMap(*raster, "mapbox://satellite");
-        maps.push_back(std::move(raster));
+        maps.push_back({std::move(raster), std::move(frontend)});
     };
 
     double rasterFootprint = (mbgl::test::getCurrentRSS() - rasterInitialRSS) / double(runs);

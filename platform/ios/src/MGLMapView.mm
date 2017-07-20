@@ -15,11 +15,13 @@
 #include <mbgl/util/default_thread_pool.hpp>
 #include <mbgl/storage/default_file_source.hpp>
 #include <mbgl/storage/network_status.hpp>
+#include <mbgl/style/style.hpp>
 #include <mbgl/style/image.hpp>
 #include <mbgl/style/transition_options.hpp>
 #include <mbgl/style/layers/custom_layer.hpp>
-#include <mbgl/map/backend.hpp>
-#include <mbgl/map/backend_scope.hpp>
+#include <mbgl/renderer/renderer.hpp>
+#include <mbgl/renderer/renderer_backend.hpp>
+#include <mbgl/renderer/backend_scope.hpp>
 #include <mbgl/math/wrap.hpp>
 #include <mbgl/util/exception.hpp>
 #include <mbgl/util/geo.hpp>
@@ -39,6 +41,7 @@
 #import "MGLMultiPoint_Private.h"
 #import "MGLOfflineStorage_Private.h"
 #import "MGLFoundation_Private.h"
+#import "MGLRendererFrontend.h"
 
 #import "NSBundle+MGLAdditions.h"
 #import "NSDate+MGLAdditions.h"
@@ -84,6 +87,8 @@ typedef NS_ENUM(NSUInteger, MGLUserTrackingState) {
     MGLUserTrackingStatePossible = 0,
     /// The map view has begun to move to the first reported user location.
     MGLUserTrackingStateBegan,
+    /// The map view begins a significant transition.
+    MGLUserTrackingStateBeginSignificantTransition,
     /// The map view has finished moving to the first reported user location.
     MGLUserTrackingStateChanged,
 };
@@ -111,6 +116,9 @@ const NSUInteger MGLTargetFrameInterval = 1;  // Target FPS will be 60 divided b
 
 /// Tolerance for snapping to true north, measured in degrees in either direction.
 const CLLocationDirection MGLToleranceForSnappingToNorth = 7;
+
+/// Distance threshold to stop the camera while animating.
+const CLLocationDistance MGLDistanceThresholdForCameraPause = 500;
 
 /// Reuse identifier and file name of the default point annotation image.
 static NSString * const MGLDefaultStyleMarkerSymbolName = @"default_marker";
@@ -272,6 +280,8 @@ public:
 {
     mbgl::Map *_mbglMap;
     MBGLView *_mbglView;
+    std::unique_ptr<MGLRenderFrontend> _rendererFrontend;
+    
     std::shared_ptr<mbgl::ThreadPool> _mbglThreadPool;
 
     BOOL _opaque;
@@ -309,6 +319,8 @@ public:
     /// Center coordinate of the pinch gesture on the previous iteration of the gesture.
     CLLocationCoordinate2D _previousPinchCenterCoordinate;
     NSUInteger _previousPinchNumberOfTouches;
+    
+    CLLocationDistance _distanceFromOldUserLocation;
 
     BOOL _delegateHasAlphasForShapeAnnotations;
     BOOL _delegateHasStrokeColorsForShapeAnnotations;
@@ -372,7 +384,7 @@ public:
 
 - (nonnull NSURL *)styleURL
 {
-    NSString *styleURLString = @(_mbglMap->getStyleURL().c_str()).mgl_stringOrNilIfEmpty;
+    NSString *styleURLString = @(_mbglMap->getStyle().getURL().c_str()).mgl_stringOrNilIfEmpty;
     NSAssert(styleURLString || _isTargetingInterfaceBuilder, @"Invalid style URL string %@", styleURLString);
     return styleURLString ? [NSURL URLWithString:styleURLString] : nil;
 }
@@ -388,18 +400,23 @@ public:
 
     styleURL = styleURL.mgl_URLByStandardizingScheme;
     self.style = nil;
-    _mbglMap->setStyleURL([[styleURL absoluteString] UTF8String]);
+    _mbglMap->getStyle().loadURL([[styleURL absoluteString] UTF8String]);
 }
 
 - (IBAction)reloadStyle:(__unused id)sender {
     NSURL *styleURL = self.styleURL;
-    _mbglMap->setStyleURL("");
+    _mbglMap->getStyle().loadURL("");
     self.styleURL = styleURL;
 }
 
 - (mbgl::Map *)mbglMap
 {
     return _mbglMap;
+}
+
+- (mbgl::Renderer *)renderer
+{
+    return _rendererFrontend->getRenderer();
 }
 
 - (void)commonInit
@@ -436,8 +453,10 @@ public:
     mbgl::DefaultFileSource *mbglFileSource = [MGLOfflineStorage sharedOfflineStorage].mbglFileSource;
     const float scaleFactor = [UIScreen instancesRespondToSelector:@selector(nativeScale)] ? [[UIScreen mainScreen] nativeScale] : [[UIScreen mainScreen] scale];
     _mbglThreadPool = mbgl::sharedThreadPool();
-    _mbglMap = new mbgl::Map(*_mbglView, self.size, scaleFactor, *mbglFileSource, *_mbglThreadPool, mbgl::MapMode::Continuous, mbgl::GLContextMode::Unique, mbgl::ConstrainMode::None, mbgl::ViewportMode::Default);
-    [self validateTileCacheSize];
+    
+    auto renderer = std::make_unique<mbgl::Renderer>(*_mbglView, scaleFactor, *mbglFileSource, *_mbglThreadPool, mbgl::GLContextMode::Unique);
+    _rendererFrontend = std::make_unique<MGLRenderFrontend>(std::move(renderer), self, _mbglView);
+    _mbglMap = new mbgl::Map(*_rendererFrontend, *_mbglView, self.size, scaleFactor, *mbglFileSource, *_mbglThreadPool, mbgl::MapMode::Continuous, mbgl::ConstrainMode::None, mbgl::ViewportMode::Default);
 
     // start paused if in IB
     if (_isTargetingInterfaceBuilder || background) {
@@ -525,20 +544,20 @@ public:
     _singleTapGestureRecognizer.delegate = self;
     [self addGestureRecognizer:_singleTapGestureRecognizer];
 
-    _twoFingerTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTwoFingerTapGesture:)];
-    _twoFingerTap.numberOfTouchesRequired = 2;
-    [_twoFingerTap requireGestureRecognizerToFail:_pinch];
-    [_twoFingerTap requireGestureRecognizerToFail:_rotate];
-    [self addGestureRecognizer:_twoFingerTap];
-
     _twoFingerDrag = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleTwoFingerDragGesture:)];
     _twoFingerDrag.minimumNumberOfTouches = 2;
     _twoFingerDrag.maximumNumberOfTouches = 2;
     _twoFingerDrag.delegate = self;
-    [_twoFingerDrag requireGestureRecognizerToFail:_twoFingerTap];
     [_twoFingerDrag requireGestureRecognizerToFail:_pan];
     [self addGestureRecognizer:_twoFingerDrag];
     _pitchEnabled = YES;
+
+    _twoFingerTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTwoFingerTapGesture:)];
+    _twoFingerTap.numberOfTouchesRequired = 2;
+    [_twoFingerTap requireGestureRecognizerToFail:_pinch];
+    [_twoFingerTap requireGestureRecognizerToFail:_rotate];
+    [_twoFingerTap requireGestureRecognizerToFail:_twoFingerDrag];
+    [self addGestureRecognizer:_twoFingerTap];
 
     _decelerationRate = MGLMapViewDecelerationRateNormal;
 
@@ -751,46 +770,10 @@ public:
 {
     MGLAssertIsMainThread();
 
-    _mbglMap->onLowMemory();
+    _rendererFrontend->onLowMemory();
 }
 
 #pragma mark - Layout -
-
-- (void)setFrame:(CGRect)frame
-{
-    [super setFrame:frame];
-    if ( ! CGRectEqualToRect(frame, self.frame))
-    {
-        [self validateTileCacheSize];
-    }
-}
-
-- (void)setBounds:(CGRect)bounds
-{
-    [super setBounds:bounds];
-    if ( ! CGRectEqualToRect(bounds, self.bounds))
-    {
-        [self validateTileCacheSize];
-    }
-}
-
-- (void)validateTileCacheSize
-{
-    if ( ! _mbglMap)
-    {
-        return;
-    }
-
-    CGFloat zoomFactor   = self.maximumZoomLevel - self.minimumZoomLevel + 1;
-    CGFloat cpuFactor    = [NSProcessInfo processInfo].processorCount;
-    CGFloat memoryFactor = (CGFloat)[NSProcessInfo processInfo].physicalMemory / 1000 / 1000 / 1000;
-    CGFloat sizeFactor   = (CGRectGetWidth(self.bounds)  / mbgl::util::tileSize) *
-                           (CGRectGetHeight(self.bounds) / mbgl::util::tileSize);
-
-    NSUInteger cacheSize = zoomFactor * cpuFactor * memoryFactor * sizeFactor * 0.5;
-
-    _mbglMap->setSourceTileCacheSize(cacheSize);
-}
 
 + (BOOL)requiresConstraintBasedLayout
 {
@@ -839,12 +822,9 @@ public:
 // This is the delegate of the GLKView object's display call.
 - (void)glkView:(__unused GLKView *)view drawInRect:(__unused CGRect)rect
 {
-    if ( ! self.dormant)
+    if ( ! self.dormant || ! _rendererFrontend)
     {
-        // The OpenGL implementation automatically enables the OpenGL context for us.
-        mbgl::BackendScope scope { *_mbglView, mbgl::BackendScope::ScopeType::Implicit };
-
-        _mbglMap->render(*_mbglView);
+        _rendererFrontend->render();
 
         [self updateUserLocationAnnotationView];
     }
@@ -1166,6 +1146,10 @@ public:
 {
     _changeDelimiterSuppressionDepth = 0;
     _mbglMap->setGestureInProgress(false);
+    if (self.userTrackingState == MGLUserTrackingStateBegan)
+    {
+        [self setUserTrackingMode:MGLUserTrackingModeNone animated:NO];
+    }
     _mbglMap->cancelTransitions();
 }
 
@@ -1295,16 +1279,16 @@ public:
             [self.delegate mapView:self shouldChangeFromCamera:oldCamera toCamera:toCamera])
         {
             _mbglMap->setZoom(zoom, mbgl::ScreenCoordinate { centerPoint.x, centerPoint.y });
-        }
-        // The gesture recognizer only reports the gesture’s current center
-        // point, so use the previous center point to anchor the transition.
-        // If the number of touches has changed, the remembered center point is
-        // meaningless.
-        if (self.userTrackingMode == MGLUserTrackingModeNone && pinch.numberOfTouches == _previousPinchNumberOfTouches)
-        {
-            CLLocationCoordinate2D centerCoordinate = _previousPinchCenterCoordinate;
-            _mbglMap->setLatLng(MGLLatLngFromLocationCoordinate2D(centerCoordinate),
-                                mbgl::ScreenCoordinate { centerPoint.x, centerPoint.y });
+            // The gesture recognizer only reports the gesture’s current center
+            // point, so use the previous center point to anchor the transition.
+            // If the number of touches has changed, the remembered center point is
+            // meaningless.
+            if (self.userTrackingMode == MGLUserTrackingModeNone && pinch.numberOfTouches == _previousPinchNumberOfTouches)
+            {
+                CLLocationCoordinate2D centerCoordinate = _previousPinchCenterCoordinate;
+                _mbglMap->setLatLng(MGLLatLngFromLocationCoordinate2D(centerCoordinate),
+                                    mbgl::ScreenCoordinate { centerPoint.x, centerPoint.y });
+            }
         }
         [self cameraIsChanging];
     }
@@ -1671,14 +1655,14 @@ public:
     if ( ! self.isPitchEnabled) return;
 
     _mbglMap->cancelTransitions();
-    MGLMapCamera *oldCamera = self.camera;
 
     if (twoFingerDrag.state == UIGestureRecognizerStateBegan)
     {
         [self trackGestureEvent:MGLEventGesturePitchStart forRecognizer:twoFingerDrag];
         [self notifyGestureDidBegin];
     }
-    else if (twoFingerDrag.state == UIGestureRecognizerStateBegan || twoFingerDrag.state == UIGestureRecognizerStateChanged)
+
+    if (twoFingerDrag.state == UIGestureRecognizerStateBegan || twoFingerDrag.state == UIGestureRecognizerStateChanged)
     {
         CGFloat gestureDistance = CGPoint([twoFingerDrag translationInView:twoFingerDrag.view]).y;
         CGFloat currentPitch = _mbglMap->getPitch();
@@ -1688,6 +1672,7 @@ public:
 
         CGPoint centerPoint = [self anchorPointForGesture:twoFingerDrag];
 
+        MGLMapCamera *oldCamera = self.camera;
         MGLMapCamera *toCamera = [self cameraByTiltingToPitch:pitchNew];
 
         if (![self.delegate respondsToSelector:@selector(mapView:shouldChangeFromCamera:toCamera:)] ||
@@ -2152,10 +2137,10 @@ public:
 
 - (void)resetPosition
 {
-    CGFloat pitch = _mbglMap->getDefaultPitch();
-    CLLocationDirection heading = mbgl::util::wrap(_mbglMap->getDefaultBearing(), 0., 360.);
-    CLLocationDistance distance = MGLAltitudeForZoomLevel(_mbglMap->getDefaultZoom(), pitch, 0, self.frame.size);
-    self.camera = [MGLMapCamera cameraLookingAtCenterCoordinate:MGLLocationCoordinate2DFromLatLng(_mbglMap->getDefaultLatLng())
+    CGFloat pitch = _mbglMap->getStyle().getDefaultPitch();
+    CLLocationDirection heading = mbgl::util::wrap(_mbglMap->getStyle().getDefaultBearing(), 0., 360.);
+    CLLocationDistance distance = MGLAltitudeForZoomLevel(_mbglMap->getStyle().getDefaultZoom(), pitch, 0, self.frame.size);
+    self.camera = [MGLMapCamera cameraLookingAtCenterCoordinate:MGLLocationCoordinate2DFromLatLng(_mbglMap->getStyle().getDefaultLatLng())
                                                    fromDistance:distance
                                                           pitch:pitch
                                                         heading:heading];
@@ -2163,7 +2148,7 @@ public:
 
 - (void)emptyMemoryCache
 {
-    _mbglMap->onLowMemory();
+    _rendererFrontend->onLowMemory();
 }
 
 - (void)setZoomEnabled:(BOOL)zoomEnabled
@@ -2546,8 +2531,6 @@ public:
 
 - (void)setMinimumZoomLevel:(double)minimumZoomLevel
 {
-    _mbglMap->setMinZoom(minimumZoomLevel);
-    [self validateTileCacheSize];
 }
 
 - (double)minimumZoomLevel
@@ -2558,7 +2541,6 @@ public:
 - (void)setMaximumZoomLevel:(double)maximumZoomLevel
 {
     _mbglMap->setMaxZoom(maximumZoomLevel);
-    [self validateTileCacheSize];
 }
 
 - (double)maximumZoomLevel
@@ -3734,7 +3716,7 @@ public:
 /// Returns the tags of the annotations coincident with the given rectangle.
 - (std::vector<MGLAnnotationTag>)annotationTagsInRect:(CGRect)rect
 {
-    return _mbglMap->queryPointAnnotations({
+    return _rendererFrontend->getRenderer()->queryPointAnnotations({
         { CGRectGetMinX(rect), CGRectGetMinY(rect) },
         { CGRectGetMaxX(rect), CGRectGetMaxY(rect) },
     });
@@ -4401,6 +4383,7 @@ public:
 {
     CLLocation *oldLocation = self.userLocation.location;
     CLLocation *newLocation = locations.lastObject;
+    _distanceFromOldUserLocation = [newLocation distanceFromLocation:oldLocation];
 
     if ( ! _showsUserLocation || ! newLocation || ! CLLocationCoordinate2DIsValid(newLocation.coordinate)) return;
 
@@ -4494,7 +4477,12 @@ public:
 /// first location update.
 - (void)didUpdateLocationSignificantlyAnimated:(BOOL)animated
 {
-    self.userTrackingState = MGLUserTrackingStateBegan;
+    
+    if (_distanceFromOldUserLocation >= MGLDistanceThresholdForCameraPause) {
+        self.userTrackingState = MGLUserTrackingStateBeginSignificantTransition;
+    } else {
+        self.userTrackingState = MGLUserTrackingStateBegan;
+    }
 
     MGLMapCamera *camera = self.camera;
     camera.centerCoordinate = self.userLocation.location.coordinate;
@@ -4514,7 +4502,8 @@ public:
           peakAltitude:-1
      completionHandler:^{
         MGLMapView *strongSelf = weakSelf;
-        if (strongSelf.userTrackingState == MGLUserTrackingStateBegan)
+        if (strongSelf.userTrackingState == MGLUserTrackingStateBegan ||
+            strongSelf.userTrackingState == MGLDistanceThresholdForCameraPause)
         {
             strongSelf.userTrackingState = MGLUserTrackingStateChanged;
         }
@@ -4727,7 +4716,7 @@ public:
         optionalFilter = predicate.mgl_filter;
     }
 
-    std::vector<mbgl::Feature> features = _mbglMap->queryRenderedFeatures(screenCoordinate, { optionalLayerIDs, optionalFilter });
+    std::vector<mbgl::Feature> features = _rendererFrontend->getRenderer()->queryRenderedFeatures(screenCoordinate, { optionalLayerIDs, optionalFilter });
     return MGLFeaturesFromMBGLFeatures(features);
 }
 
@@ -4760,7 +4749,7 @@ public:
         optionalFilter = predicate.mgl_filter;
     }
 
-    std::vector<mbgl::Feature> features = _mbglMap->queryRenderedFeatures(screenBox, { optionalLayerIDs, optionalFilter });
+    std::vector<mbgl::Feature> features = _rendererFrontend->getRenderer()->queryRenderedFeatures(screenBox, { optionalLayerIDs, optionalFilter });
     return MGLFeaturesFromMBGLFeatures(features);
 }
 
@@ -4986,7 +4975,7 @@ public:
         return;
     }
 
-    self.style = [[MGLStyle alloc] initWithMapView:self];
+    self.style = [[MGLStyle alloc] initWithRawStyle:&_mbglMap->getStyle() mapView:self];
     if ([self.delegate respondsToSelector:@selector(mapView:didFinishLoadingStyle:)])
     {
         [self.delegate mapView:self didFinishLoadingStyle:self.style];
@@ -5428,7 +5417,7 @@ public:
     return _annotationViewReuseQueueByIdentifier[identifier];
 }
 
-class MBGLView : public mbgl::View, public mbgl::Backend
+class MBGLView : public mbgl::View, public mbgl::RendererBackend, public mbgl::MapObserver
 {
 public:
     MBGLView(MGLMapView* nativeView_) : nativeView(nativeView_) {
@@ -5439,7 +5428,7 @@ public:
     /// context state with the anticipated values.
     void updateAssumedState() override {
         assumeFramebufferBinding(ImplicitFramebufferBinding);
-        assumeViewportSize(nativeView.framebufferSize);
+        assumeViewport(0, 0, nativeView.framebufferSize);
     }
 
     void bind() override {
@@ -5452,7 +5441,7 @@ public:
             updateAssumedState();
         } else {
             // Our framebuffer is still bound, but the viewport might have changed.
-            setViewportSize(nativeView.framebufferSize);
+            setViewport(0, 0, nativeView.framebufferSize);
         }
     }
 
@@ -5539,10 +5528,9 @@ public:
 
         return reinterpret_cast<mbgl::gl::ProcAddress>(symbol);
     }
-
-    void invalidate() override
-    {
-        [nativeView setNeedsGLDisplay];
+    
+    mbgl::BackendScope::ScopeType getScopeType() const override {
+        return mbgl::BackendScope::ScopeType::Implicit;
     }
 
     void activate() override

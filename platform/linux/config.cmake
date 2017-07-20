@@ -1,4 +1,4 @@
-mason_use(glfw VERSION 2017-02-09-77a8f10)
+mason_use(glfw VERSION 2017-07-13-67c9155)
 mason_use(mesa VERSION 13.0.4)
 mason_use(boost_libprogram_options VERSION 1.62.0${MASON_CXXABI_SUFFIX})
 mason_use(sqlite VERSION 3.14.2)
@@ -69,6 +69,7 @@ macro(mbgl_platform_core)
         PRIVATE platform/default/string_stdlib.cpp
         PRIVATE platform/default/thread.cpp
         PRIVATE platform/default/bidi.cpp
+        PRIVATE platform/default/thread_local.cpp
         PRIVATE platform/default/utf.cpp
 
         # Image handling

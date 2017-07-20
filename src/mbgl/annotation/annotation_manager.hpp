@@ -6,6 +6,7 @@
 #include <mbgl/map/update.hpp>
 #include <mbgl/util/noncopyable.hpp>
 
+#include <mutex>
 #include <string>
 #include <vector>
 #include <unordered_set>
@@ -25,7 +26,7 @@ class Style;
 
 class AnnotationManager : private util::noncopyable {
 public:
-    AnnotationManager();
+    AnnotationManager(style::Style&);
     ~AnnotationManager();
 
     AnnotationID addAnnotation(const Annotation&, const uint8_t maxZoom);
@@ -36,7 +37,9 @@ public:
     void removeImage(const std::string&);
     double getTopOffsetPixelsForImage(const std::string&);
 
-    void updateStyle(style::Style&);
+    void setStyle(style::Style&);
+    void onStyleLoaded();
+
     void updateData();
 
     void addTile(AnnotationTile&);
@@ -54,9 +57,15 @@ private:
     Update update(const AnnotationID&, const LineAnnotation&, const uint8_t);
     Update update(const AnnotationID&, const FillAnnotation&, const uint8_t);
 
-    void removeAndAdd(const AnnotationID&, const Annotation&, const uint8_t);
+    void remove(const AnnotationID&);
+
+    void updateStyle();
 
     std::unique_ptr<AnnotationTileData> getTileData(const CanonicalTileID&);
+
+    std::reference_wrapper<style::Style> style;
+
+    std::mutex mutex;
 
     AnnotationID nextID = 0;
 
@@ -71,8 +80,7 @@ private:
     SymbolAnnotationMap symbolAnnotations;
     ShapeAnnotationMap shapeAnnotations;
     ImageMap images;
-    std::unordered_set<std::string> obsoleteShapeAnnotationLayers;
-    std::unordered_set<std::string> obsoleteImages;
+
     std::unordered_set<AnnotationTile*> tiles;
 
     friend class AnnotationTile;

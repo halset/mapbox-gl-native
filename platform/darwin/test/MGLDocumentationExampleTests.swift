@@ -104,6 +104,20 @@ class MGLDocumentationExampleTests: XCTestCase, MGLMapViewDelegate {
         XCTAssertNotNil(mapView.style?.source(withIdentifier: "pois"))
     }
 
+    func testMGLImageSource() {
+        //#-example-code
+        let coordinates = MGLCoordinateQuad(
+          topLeft: CLLocationCoordinate2D(latitude: 46.437, longitude: -80.425),
+          bottomLeft: CLLocationCoordinate2D(latitude: 37.936, longitude: -80.425),
+          bottomRight: CLLocationCoordinate2D(latitude: 37.936, longitude: -71.516),
+          topRight: CLLocationCoordinate2D(latitude: 46.437, longitude: -71.516))
+        let source = MGLImageSource(identifier: "radar", coordinateQuad: coordinates, url: URL(string: "https://www.mapbox.com/mapbox-gl-js/assets/radar.gif")!)
+        mapView.style?.addSource(source)
+        //#-end-example-code
+
+        XCTAssertNotNil(mapView.style?.source(withIdentifier: "radar"))
+    }
+
     func testMGLCircleStyleLayer() {
         let population = MGLVectorSource(identifier: "population", configurationURL: URL(string: "https://example.com/style.json")!)
         mapView.style?.addSource(population)

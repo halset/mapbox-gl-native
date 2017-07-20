@@ -1,7 +1,7 @@
 #include <mbgl/test/util.hpp>
 #include <mbgl/test/stub_layer_observer.hpp>
 #include <mbgl/test/stub_file_source.hpp>
-#include <mbgl/style/style.hpp>
+#include <mbgl/style/style_impl.hpp>
 #include <mbgl/style/layers/background_layer.hpp>
 #include <mbgl/style/layers/background_layer_impl.hpp>
 #include <mbgl/style/layers/circle_layer.hpp>
@@ -275,8 +275,8 @@ TEST(Layer, DuplicateLayer) {
     // Setup style
     ThreadPool threadPool{ 1 };
     StubFileSource fileSource;
-    Style style { threadPool, fileSource, 1.0 };
-    style.setJSON(util::read_file("test/fixtures/resources/style-unused-sources.json"));
+    Style::Impl style { threadPool, fileSource, 1.0 };
+    style.loadJSON(util::read_file("test/fixtures/resources/style-unused-sources.json"));
 
     // Add initial layer
     style.addLayer(std::make_unique<LineLayer>("line", "unusedsource"));

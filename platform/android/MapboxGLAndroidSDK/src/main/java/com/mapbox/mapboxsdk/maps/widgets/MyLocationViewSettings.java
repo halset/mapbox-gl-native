@@ -5,9 +5,9 @@ import android.support.annotation.ColorInt;
 import android.support.annotation.IntRange;
 import android.support.annotation.NonNull;
 
+import com.mapbox.mapboxsdk.camera.CameraPosition;
 import com.mapbox.mapboxsdk.constants.MyLocationTracking;
 import com.mapbox.mapboxsdk.maps.FocalPointChangeListener;
-import com.mapbox.mapboxsdk.camera.CameraPosition;
 import com.mapbox.mapboxsdk.maps.MapboxMapOptions;
 import com.mapbox.mapboxsdk.maps.Projection;
 
@@ -51,6 +51,7 @@ public class MyLocationViewSettings {
   //
 
   private int accuracyAlpha;
+  private float accuracyThreshold = 0f;
 
   @ColorInt
   private int accuracyTintColor;
@@ -77,6 +78,11 @@ public class MyLocationViewSettings {
     this.focalPointChangeListener = focalPointChangedListener;
   }
 
+  /**
+   * Initialise this with MapboxMapOptions.
+   *
+   * @param options the options to initialise this class from
+   */
   public void initialise(@NonNull MapboxMapOptions options) {
     CameraPosition position = options.getCamera();
     if (position != null && !position.equals(CameraPosition.DEFAULT)) {
@@ -88,6 +94,7 @@ public class MyLocationViewSettings {
     setBackgroundTintColor(options.getMyLocationBackgroundTintColor());
     setAccuracyAlpha(options.getMyLocationAccuracyAlpha());
     setAccuracyTintColor(options.getMyLocationAccuracyTintColor());
+    setAccuracyThreshold(options.getMyLocationAccuracyThreshold());
   }
 
   /**
@@ -114,6 +121,7 @@ public class MyLocationViewSettings {
    * <p>
    * The foreground drawable is the image visible on screen
    * </p>
+   * It's linked with the foreground tint color
    *
    * @param foregroundDrawable        the drawable to show as foreground without bearing
    * @param foregroundBearingDrawable the drawable to show as foreground when bearing is enabled
@@ -122,6 +130,7 @@ public class MyLocationViewSettings {
     this.foregroundDrawable = foregroundDrawable;
     this.foregroundBearingDrawable = foregroundBearingDrawable;
     myLocationView.setForegroundDrawables(foregroundDrawable, foregroundBearingDrawable);
+    myLocationView.setForegroundDrawableTint(foregroundTintColor);
   }
 
   /**
@@ -148,7 +157,8 @@ public class MyLocationViewSettings {
    * The color will tint both the foreground and the bearing foreground drawable.
    * </p>
    *
-   * @param foregroundTintColor the color to tint the foreground drawable
+   * @param foregroundTintColor the color to tint the foreground drawable or -1 (undefined color) to remove the
+   *                            existing foreground tint color
    */
   public void setForegroundTintColor(@ColorInt int foregroundTintColor) {
     this.foregroundTintColor = foregroundTintColor;
@@ -169,6 +179,7 @@ public class MyLocationViewSettings {
    * <p>
    * Padding can be added to provide an offset to the background
    * </p>
+   * It's linked with the background tint color
    *
    * @param backgroundDrawable the drawable to show as background
    * @param padding            the padding added to the background
@@ -181,6 +192,7 @@ public class MyLocationViewSettings {
     } else {
       myLocationView.setShadowDrawable(backgroundDrawable);
     }
+    myLocationView.setShadowDrawableTint(backgroundTintColor);
   }
 
   /**
@@ -195,7 +207,8 @@ public class MyLocationViewSettings {
   /**
    * Set the background tint color.
    *
-   * @param backgroundTintColor the color to tint the background
+   * @param backgroundTintColor the color to tint the background drawable or -1 (undefined color) to remove the
+   *                            existing background tint color
    */
   public void setBackgroundTintColor(@ColorInt int backgroundTintColor) {
     this.backgroundTintColor = backgroundTintColor;
@@ -280,6 +293,25 @@ public class MyLocationViewSettings {
   public void setAccuracyTintColor(@ColorInt int accuracyTintColor) {
     this.accuracyTintColor = accuracyTintColor;
     myLocationView.setAccuracyTint(accuracyTintColor);
+  }
+
+  /**
+   * Returns current accuracy threshold value (in meters).
+   *
+   * @return Value of accuracy threshold (in meters), below which circle won't be displayed
+   */
+  public float getAccuracyThreshold() {
+    return accuracyThreshold;
+  }
+
+  /**
+   * Set accuracy circle threshold. Circle won't be displayed if accuracy is below set value.
+   *
+   * @param accuracyThreshold Value of accuracy (in meters), below which circle won't be displayed
+   */
+  public void setAccuracyThreshold(float accuracyThreshold) {
+    this.accuracyThreshold = accuracyThreshold;
+    myLocationView.setAccuracyThreshold(accuracyThreshold);
   }
 
   public void setTilt(double tilt) {
