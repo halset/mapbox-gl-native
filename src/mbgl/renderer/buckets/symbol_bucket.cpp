@@ -1,8 +1,8 @@
 #include <mbgl/renderer/buckets/symbol_bucket.hpp>
-#include <mbgl/renderer/painter.hpp>
 #include <mbgl/renderer/layers/render_symbol_layer.hpp>
 #include <mbgl/renderer/bucket_parameters.hpp>
 #include <mbgl/style/layers/symbol_layer_impl.hpp>
+#include <mbgl/text/glyph_atlas.hpp>
 
 namespace mbgl {
 
@@ -37,14 +37,14 @@ SymbolBucket::SymbolBucket(style::SymbolLayoutProperties::PossiblyEvaluated layo
 void SymbolBucket::upload(gl::Context& context) {
     if (hasTextData()) {
         text.vertexBuffer = context.createVertexBuffer(std::move(text.vertices));
+        text.dynamicVertexBuffer = context.createVertexBuffer(std::move(text.dynamicVertices), gl::BufferUsage::StreamDraw);
         text.indexBuffer = context.createIndexBuffer(std::move(text.triangles));
-        textSizeBinder->upload(context);
     }
 
     if (hasIconData()) {
         icon.vertexBuffer = context.createVertexBuffer(std::move(icon.vertices));
+        icon.dynamicVertexBuffer = context.createVertexBuffer(std::move(icon.dynamicVertices), gl::BufferUsage::StreamDraw);
         icon.indexBuffer = context.createIndexBuffer(std::move(icon.triangles));
-        iconSizeBinder->upload(context);
     }
 
     if (!collisionBox.vertices.empty()) {
@@ -60,16 +60,8 @@ void SymbolBucket::upload(gl::Context& context) {
     uploaded = true;
 }
 
-void SymbolBucket::render(Painter& painter,
-                          PaintParameters& parameters,
-                          const RenderLayer& layer,
-                          const RenderTile& tile) {
-    painter.renderSymbol(parameters, *this, *layer.as<RenderSymbolLayer>(), tile);
-}
-
 bool SymbolBucket::hasData() const {
-    assert(false); // Should be calling SymbolLayout::has{Text,Icon,CollisonBox}Data() instead.
-    return false;
+    return hasTextData() || hasIconData() || hasCollisionBoxData();
 }
 
 bool SymbolBucket::hasTextData() const {

@@ -168,7 +168,7 @@ void Transform::flyTo(const CameraOptions &camera, const AnimationOptions &anima
     double angle = camera.angle.value_or(getAngle());
     double pitch = camera.pitch.value_or(getPitch());
 
-    if (std::isnan(zoom)) {
+    if (std::isnan(zoom) || state.size.isEmpty()) {
         return;
     }
 
@@ -292,6 +292,11 @@ void Transform::flyTo(const CameraOptions &camera, const AnimationOptions &anima
         // Calculate the current point and zoom level along the flight path.
         Point<double> framePoint = util::interpolate(startPoint, endPoint, us);
         double frameZoom = startZoom + state.scaleZoom(1 / w(s));
+
+        // Zoom can be NaN if size is empty.
+        if (std::isnan(frameZoom)) {
+            frameZoom = zoom;
+        }
 
         // Convert to geographic coordinates and set the new viewpoint.
         LatLng frameLatLng = Projection::unproject(framePoint, startScale);

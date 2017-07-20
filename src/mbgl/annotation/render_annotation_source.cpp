@@ -1,6 +1,7 @@
 #include <mbgl/annotation/render_annotation_source.hpp>
 #include <mbgl/annotation/annotation_tile.hpp>
 #include <mbgl/renderer/render_tile.hpp>
+#include <mbgl/renderer/paint_parameters.hpp>
 
 #include <mbgl/algorithm/generate_clip_ids.hpp>
 #include <mbgl/algorithm/generate_clip_ids_impl.hpp>
@@ -43,16 +44,16 @@ void RenderAnnotationSource::update(Immutable<style::Source::Impl> baseImpl_,
                        });
 }
 
-void RenderAnnotationSource::startRender(algorithm::ClipIDGenerator& generator, const mat4& projMatrix, const mat4& clipMatrix, const TransformState& transform) {
-    generator.update(tilePyramid.getRenderTiles());
-    tilePyramid.startRender(projMatrix, clipMatrix, transform);
+void RenderAnnotationSource::startRender(PaintParameters& parameters) {
+    parameters.clipIDGenerator.update(tilePyramid.getRenderTiles());
+    tilePyramid.startRender(parameters);
 }
 
-void RenderAnnotationSource::finishRender(Painter& painter) {
-    tilePyramid.finishRender(painter);
+void RenderAnnotationSource::finishRender(PaintParameters& parameters) {
+    tilePyramid.finishRender(parameters);
 }
 
-std::map<UnwrappedTileID, RenderTile>& RenderAnnotationSource::getRenderTiles() {
+std::vector<std::reference_wrapper<RenderTile>> RenderAnnotationSource::getRenderTiles() {
     return tilePyramid.getRenderTiles();
 }
 
@@ -66,10 +67,6 @@ RenderAnnotationSource::queryRenderedFeatures(const ScreenLineString& geometry,
 
 std::vector<Feature> RenderAnnotationSource::querySourceFeatures(const SourceQueryOptions&) const {
     return {};
-}
-
-void RenderAnnotationSource::setCacheSize(size_t size) {
-    tilePyramid.setCacheSize(size);
 }
 
 void RenderAnnotationSource::onLowMemory() {

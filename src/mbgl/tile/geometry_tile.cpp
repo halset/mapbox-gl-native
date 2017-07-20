@@ -10,11 +10,13 @@
 #include <mbgl/renderer/layers/render_custom_layer.hpp>
 #include <mbgl/renderer/layers/render_symbol_layer.hpp>
 #include <mbgl/renderer/buckets/symbol_bucket.hpp>
+#include <mbgl/renderer/query.hpp>
+#include <mbgl/text/glyph_atlas.hpp>
+#include <mbgl/renderer/image_atlas.hpp>
 #include <mbgl/storage/file_source.hpp>
 #include <mbgl/geometry/feature_index.hpp>
 #include <mbgl/text/collision_tile.hpp>
 #include <mbgl/map/transform_state.hpp>
-#include <mbgl/map/query.hpp>
 #include <mbgl/util/run_loop.hpp>
 #include <mbgl/style/filter_evaluator.hpp>
 #include <mbgl/util/chrono.hpp>
@@ -38,14 +40,15 @@ GeometryTile::GeometryTile(const OverscaledTileID& id_,
              obsolete,
              parameters.mode,
              parameters.pixelRatio),
-      glyphAtlas(parameters.glyphAtlas),
-      spriteAtlas(parameters.spriteAtlas),
-      placementThrottler(Milliseconds(300), [this] { invokePlacement(); }) {
+      glyphManager(parameters.glyphManager),
+      imageManager(parameters.imageManager),
+      placementThrottler(Milliseconds(300), [this] { invokePlacement(); }),
+      lastYStretch(1.0f) {
 }
 
 GeometryTile::~GeometryTile() {
-    glyphAtlas.removeGlyphs(*this);
-    spriteAtlas.removeRequestor(*this);
+    glyphManager.removeRequestor(*this);
+    imageManager.removeRequestor(*this);
     markObsolete();
 }
 
@@ -135,6 +138,15 @@ void GeometryTile::onPlacement(PlacementResult result) {
     }
     symbolBuckets = std::move(result.symbolBuckets);
     collisionTile = std::move(result.collisionTile);
+    if (result.glyphAtlasImage) {
+        glyphAtlasImage = std::move(*result.glyphAtlasImage);
+    }
+    if (result.iconAtlasImage) {
+        iconAtlasImage = std::move(*result.iconAtlasImage);
+    }
+    if (collisionTile.get()) {
+        lastYStretch = collisionTile->yStretch;
+    }
     observer->onTileChanged(*this);
 }
 
@@ -145,20 +157,46 @@ void GeometryTile::onError(std::exception_ptr err) {
     observer->onTileError(*this, err);
 }
     
-void GeometryTile::onGlyphsAvailable(GlyphPositionMap glyphPositions) {
-    worker.invoke(&GeometryTileWorker::onGlyphsAvailable, std::move(glyphPositions));
+void GeometryTile::onGlyphsAvailable(GlyphMap glyphs) {
+    worker.invoke(&GeometryTileWorker::onGlyphsAvailable, std::move(glyphs));
 }
 
 void GeometryTile::getGlyphs(GlyphDependencies glyphDependencies) {
-    glyphAtlas.getGlyphs(*this, std::move(glyphDependencies));
+    glyphManager.getGlyphs(*this, std::move(glyphDependencies));
 }
 
-void GeometryTile::onIconsAvailable(IconMap icons) {
-    worker.invoke(&GeometryTileWorker::onIconsAvailable, std::move(icons));
+void GeometryTile::onImagesAvailable(ImageMap images) {
+    worker.invoke(&GeometryTileWorker::onImagesAvailable, std::move(images));
 }
 
-void GeometryTile::getIcons(IconDependencies iconDependencies) {
-    spriteAtlas.getIcons(*this, std::move(iconDependencies));
+void GeometryTile::getImages(ImageDependencies imageDependencies) {
+    imageManager.getImages(*this, std::move(imageDependencies));
+}
+
+void GeometryTile::upload(gl::Context& context) {
+    auto uploadFn = [&] (Bucket& bucket) {
+        if (bucket.needsUpload()) {
+            bucket.upload(context);
+        }
+    };
+
+    for (auto& entry : nonSymbolBuckets) {
+        uploadFn(*entry.second);
+    }
+
+    for (auto& entry : symbolBuckets) {
+        uploadFn(*entry.second);
+    }
+
+    if (glyphAtlasImage) {
+        glyphAtlasTexture = context.createTexture(*glyphAtlasImage, 0);
+        glyphAtlasImage = {};
+    }
+
+    if (iconAtlasImage) {
+        iconAtlasTexture = context.createTexture(*iconAtlasImage, 0);
+        iconAtlasImage = {};
+    }
 }
 
 Bucket* GeometryTile::getBucket(const Layer::Impl& layer) const {
@@ -228,6 +266,13 @@ void GeometryTile::querySourceFeatures(
             }
         }
     }
+}
+
+float GeometryTile::yStretch() const {
+    // collisionTile gets reset in onLayout but we don't clear the symbolBuckets
+    // until a new placement result comes along, so keep the yStretch value in
+    // case we need to render them.
+    return lastYStretch;
 }
 
 } // namespace mbgl

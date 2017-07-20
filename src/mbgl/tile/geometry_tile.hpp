@@ -1,13 +1,15 @@
 #pragma once
 
-#include <mbgl/sprite/sprite_atlas.hpp>
 #include <mbgl/tile/tile.hpp>
 #include <mbgl/tile/geometry_tile_worker.hpp>
-#include <mbgl/text/glyph_atlas.hpp>
+#include <mbgl/renderer/image_manager.hpp>
+#include <mbgl/text/glyph_manager.hpp>
 #include <mbgl/text/placement_config.hpp>
+#include <mbgl/text/collision_tile.hpp>
 #include <mbgl/util/feature.hpp>
 #include <mbgl/util/throttler.hpp>
 #include <mbgl/actor/actor.hpp>
+#include <mbgl/geometry/feature_index.hpp>
 
 #include <atomic>
 #include <memory>
@@ -17,14 +19,14 @@
 namespace mbgl {
 
 class GeometryTileData;
-class FeatureIndex;
-class CollisionTile;
 class RenderStyle;
 class RenderLayer;
 class SourceQueryOptions;
 class TileParameters;
+class GlyphAtlas;
+class ImageAtlas;
 
-class GeometryTile : public Tile, public GlyphRequestor, IconRequestor {
+class GeometryTile : public Tile, public GlyphRequestor, ImageRequestor {
 public:
     GeometryTile(const OverscaledTileID&,
                  std::string sourceID,
@@ -38,13 +40,17 @@ public:
     void setPlacementConfig(const PlacementConfig&) override;
     void setLayers(const std::vector<Immutable<style::Layer::Impl>>&) override;
     
-    void onGlyphsAvailable(GlyphPositionMap) override;
-    void onIconsAvailable(IconMap) override;
+    void onGlyphsAvailable(GlyphMap) override;
+    void onImagesAvailable(ImageMap) override;
     
     void getGlyphs(GlyphDependencies);
-    void getIcons(IconDependencies);
+    void getImages(ImageDependencies);
 
+    void upload(gl::Context&) override;
     Bucket* getBucket(const style::Layer::Impl&) const override;
+
+    Size bindGlyphAtlas(gl::Context&);
+    Size bindIconAtlas(gl::Context&);
 
     void queryRenderedFeatures(
             std::unordered_map<std::string, std::vector<Feature>>& result,
@@ -65,6 +71,15 @@ public:
         std::unique_ptr<FeatureIndex> featureIndex;
         std::unique_ptr<GeometryTileData> tileData;
         uint64_t correlationID;
+
+        LayoutResult(std::unordered_map<std::string, std::shared_ptr<Bucket>> nonSymbolBuckets_,
+                     std::unique_ptr<FeatureIndex> featureIndex_,
+                     std::unique_ptr<GeometryTileData> tileData_,
+                     uint64_t correlationID_)
+            : nonSymbolBuckets(std::move(nonSymbolBuckets_)),
+              featureIndex(std::move(featureIndex_)),
+              tileData(std::move(tileData_)),
+              correlationID(correlationID_) {}
     };
     void onLayout(LayoutResult);
 
@@ -72,11 +87,26 @@ public:
     public:
         std::unordered_map<std::string, std::shared_ptr<Bucket>> symbolBuckets;
         std::unique_ptr<CollisionTile> collisionTile;
+        optional<AlphaImage> glyphAtlasImage;
+        optional<PremultipliedImage> iconAtlasImage;
         uint64_t correlationID;
+
+        PlacementResult(std::unordered_map<std::string, std::shared_ptr<Bucket>> symbolBuckets_,
+                        std::unique_ptr<CollisionTile> collisionTile_,
+                        optional<AlphaImage> glyphAtlasImage_,
+                        optional<PremultipliedImage> iconAtlasImage_,
+                        uint64_t correlationID_)
+            : symbolBuckets(std::move(symbolBuckets_)),
+              collisionTile(std::move(collisionTile_)),
+              glyphAtlasImage(std::move(glyphAtlasImage_)),
+              iconAtlasImage(std::move(iconAtlasImage_)),
+              correlationID(correlationID_) {}
     };
     void onPlacement(PlacementResult);
 
     void onError(std::exception_ptr);
+    
+    float yStretch() const override;
     
 protected:
     const GeometryTileData* getData() {
@@ -95,8 +125,8 @@ private:
     std::shared_ptr<Mailbox> mailbox;
     Actor<GeometryTileWorker> worker;
 
-    GlyphAtlas& glyphAtlas;
-    SpriteAtlas& spriteAtlas;
+    GlyphManager& glyphManager;
+    ImageManager& imageManager;
 
     uint64_t correlationID = 0;
     optional<PlacementConfig> requestedConfig;
@@ -105,10 +135,18 @@ private:
     std::unique_ptr<FeatureIndex> featureIndex;
     std::unique_ptr<const GeometryTileData> data;
 
+    optional<AlphaImage> glyphAtlasImage;
+    optional<PremultipliedImage> iconAtlasImage;
+
     std::unordered_map<std::string, std::shared_ptr<Bucket>> symbolBuckets;
     std::unique_ptr<CollisionTile> collisionTile;
     
     util::Throttler placementThrottler;
+    float lastYStretch;
+
+public:
+    optional<gl::Texture> glyphAtlasTexture;
+    optional<gl::Texture> iconAtlasTexture;
 };
 
 } // namespace mbgl
