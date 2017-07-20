@@ -14,14 +14,9 @@ class Bucket;
 class BucketParameters;
 class TransitionParameters;
 class PropertyEvaluationParameters;
-class Painter;
 class PaintParameters;
 class RenderSource;
 class RenderTile;
-
-namespace gl {
-class Context;
-}   // namespace gl
 
 class RenderLayer {
 protected:
@@ -66,8 +61,8 @@ public:
     // Checks whether this layer can be rendered.
     bool needsRendering(float zoom) const;
 
-    virtual void uploadBuckets(gl::Context&, RenderSource* source);
-    virtual void render(Painter& , PaintParameters& , RenderSource* source);
+    virtual void render(PaintParameters&, RenderSource*) = 0;
+
     // Check wether the given geometry intersects
     // with the feature
     virtual bool queryIntersectsFeature(

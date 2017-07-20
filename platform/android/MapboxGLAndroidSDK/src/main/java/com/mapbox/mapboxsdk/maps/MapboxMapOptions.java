@@ -4,7 +4,6 @@ import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Parcel;
@@ -37,6 +36,7 @@ public class MapboxMapOptions implements Parcelable {
 
   private static final float FOUR_DP = 4f;
   private static final float NINETY_TWO_DP = 92f;
+  private static final int UNDEFINED_COLOR = -1;
 
   private CameraPosition cameraPosition;
 
@@ -53,7 +53,7 @@ public class MapboxMapOptions implements Parcelable {
   private int[] logoMargins;
 
   @ColorInt
-  private int attributionTintColor = -1;
+  private int attributionTintColor = UNDEFINED_COLOR;
   private boolean attributionEnabled = true;
   private int attributionGravity = Gravity.BOTTOM;
   private int[] attributionMargins;
@@ -72,11 +72,15 @@ public class MapboxMapOptions implements Parcelable {
   private Drawable myLocationForegroundDrawable;
   private Drawable myLocationForegroundBearingDrawable;
   private Drawable myLocationBackgroundDrawable;
-  private int myLocationForegroundTintColor;
-  private int myLocationBackgroundTintColor;
+  @ColorInt
+  private int myLocationForegroundTintColor = UNDEFINED_COLOR;
+  @ColorInt
+  private int myLocationBackgroundTintColor = UNDEFINED_COLOR;
   private int[] myLocationBackgroundPadding;
   private int myLocationAccuracyTintColor;
   private int myLocationAccuracyAlpha;
+  private float myLocationAccuracyThreshold;
+  private boolean prefetchesTiles = true;
 
   private String apiBaseUrl;
 
@@ -146,10 +150,12 @@ public class MapboxMapOptions implements Parcelable {
     myLocationBackgroundPadding = in.createIntArray();
     myLocationAccuracyAlpha = in.readInt();
     myLocationAccuracyTintColor = in.readInt();
+    myLocationAccuracyThreshold = in.readFloat();
 
     style = in.readString();
     apiBaseUrl = in.readString();
     textureMode = in.readByte() != 0;
+    prefetchesTiles = in.readByte() != 0;
   }
 
   static Bitmap getBitmapFromDrawable(Drawable drawable) {
@@ -234,7 +240,7 @@ public class MapboxMapOptions implements Parcelable {
           FOUR_DP * pxlRatio))});
 
       mapboxMapOptions.attributionTintColor(typedArray.getColor(
-        R.styleable.mapbox_MapView_mapbox_uiAttributionTintColor, -1));
+        R.styleable.mapbox_MapView_mapbox_uiAttributionTintColor, UNDEFINED_COLOR));
       mapboxMapOptions.attributionEnabled(typedArray.getBoolean(
         R.styleable.mapbox_MapView_mapbox_uiAttribution, true));
       mapboxMapOptions.attributionGravity(typedArray.getInt(
@@ -251,10 +257,9 @@ public class MapboxMapOptions implements Parcelable {
 
       mapboxMapOptions.locationEnabled(typedArray.getBoolean(R.styleable.mapbox_MapView_mapbox_myLocation, false));
       mapboxMapOptions.myLocationForegroundTintColor(
-        typedArray.getColor(R.styleable.mapbox_MapView_mapbox_myLocationTintColor,
-          ColorUtils.getPrimaryColor(context)));
+        typedArray.getColor(R.styleable.mapbox_MapView_mapbox_myLocationTintColor, UNDEFINED_COLOR));
       mapboxMapOptions.myLocationBackgroundTintColor(
-        typedArray.getColor(R.styleable.mapbox_MapView_mapbox_myLocationBackgroundTintColor, Color.WHITE));
+        typedArray.getColor(R.styleable.mapbox_MapView_mapbox_myLocationBackgroundTintColor, UNDEFINED_COLOR));
 
       Drawable foregroundDrawable = typedArray.getDrawable(R.styleable.mapbox_MapView_mapbox_myLocationDrawable);
       if (foregroundDrawable == null) {
@@ -290,8 +295,12 @@ public class MapboxMapOptions implements Parcelable {
       mapboxMapOptions.myLocationAccuracyTint(
         typedArray.getColor(R.styleable.mapbox_MapView_mapbox_myLocationAccuracyTintColor,
           ColorUtils.getPrimaryColor(context)));
+      mapboxMapOptions.myLocationAccuracyThreshold(
+        typedArray.getFloat(R.styleable.mapbox_MapView_mapbox_myLocationAccuracyThreshold, 0));
       mapboxMapOptions.textureMode(
         typedArray.getBoolean(R.styleable.mapbox_MapView_mapbox_renderTextureMode, false));
+      mapboxMapOptions.setPrefetchesTiles(
+        typedArray.getBoolean(R.styleable.mapbox_MapView_mapbox_enableTilePrefetch, true));
     } finally {
       typedArray.recycle();
     }
@@ -378,7 +387,7 @@ public class MapboxMapOptions implements Parcelable {
   /**
    * Specifies the gravity state of mapbox_compass_icon for a map view.
    *
-   * @param gravity see {@link android.view.Gravity}
+   * @param gravity Android SDK Gravity.
    * @return This
    */
   public MapboxMapOptions compassGravity(int gravity) {
@@ -439,7 +448,7 @@ public class MapboxMapOptions implements Parcelable {
   /**
    * Specifies the gravity state of logo for a map view.
    *
-   * @param gravity see {@link android.view.Gravity}
+   * @param gravity Android SDK Gravity.
    * @return This
    */
   public MapboxMapOptions logoGravity(int gravity) {
@@ -472,7 +481,7 @@ public class MapboxMapOptions implements Parcelable {
   /**
    * Specifies the gravity state of attribution for a map view.
    *
-   * @param gravity see {@link android.view.Gravity}
+   * @param gravity Android SDK Gravity.
    * @return This
    */
   public MapboxMapOptions attributionGravity(int gravity) {
@@ -638,7 +647,7 @@ public class MapboxMapOptions implements Parcelable {
   /**
    * Set the background tint color of MyLocationView.
    *
-   * @param myLocationBackgroundTintColor the color to tint the background
+   * @param myLocationBackgroundTintColor the color to tint the background drawable
    * @return This
    */
   public MapboxMapOptions myLocationBackgroundTintColor(@ColorInt int myLocationBackgroundTintColor) {
@@ -680,6 +689,17 @@ public class MapboxMapOptions implements Parcelable {
   }
 
   /**
+   * Set accuracy circle threshold. Circle won't be displayed if accuracy is below set value.
+   *
+   * @param myLocationAccuracyThreshold Value of accuracy (in meters), below which circle won't be displayed
+   * @return This
+   */
+  public MapboxMapOptions myLocationAccuracyThreshold(float myLocationAccuracyThreshold) {
+    this.myLocationAccuracyThreshold = myLocationAccuracyThreshold;
+    return this;
+  }
+
+  /**
    * Enable TextureView as rendered surface.
    * <p>
    * Since the 4.2.0 release we replaced our TextureView with an SurfaceView implemenation.
@@ -693,6 +713,30 @@ public class MapboxMapOptions implements Parcelable {
   public MapboxMapOptions textureMode(boolean textureMode) {
     this.textureMode = textureMode;
     return this;
+  }
+
+  /**
+   * Enable tile pre-fetching. Loads tiles at a lower zoom-level to pre-render
+   * a low resolution preview while more detailed tiles are loaded.
+   *
+   * Enabled by default
+   *
+   * @param enable true to enable
+   *
+   * @return This
+   */
+  public MapboxMapOptions setPrefetchesTiles(boolean enable) {
+    this.prefetchesTiles = enable;
+    return this;
+  }
+
+  /**
+   * Check whether tile pre-fetching is enabled.
+   *
+   * @return true if enabled
+   */
+  public boolean getPrefetchesTiles() {
+    return prefetchesTiles;
   }
 
   /**
@@ -944,6 +988,7 @@ public class MapboxMapOptions implements Parcelable {
    *
    * @return the tint color
    */
+  @ColorInt
   public int getMyLocationForegroundTintColor() {
     return myLocationForegroundTintColor;
   }
@@ -953,6 +998,7 @@ public class MapboxMapOptions implements Parcelable {
    *
    * @return the tint color
    */
+  @ColorInt
   public int getMyLocationBackgroundTintColor() {
     return myLocationBackgroundTintColor;
   }
@@ -982,6 +1028,15 @@ public class MapboxMapOptions implements Parcelable {
    */
   public int getMyLocationAccuracyAlpha() {
     return myLocationAccuracyAlpha;
+  }
+
+  /**
+   * Returns current accuracy threshold value (in meters).
+   *
+   * @return Value of accuracy threshold (in meters), below which circle won't be displayed
+   */
+  public float getMyLocationAccuracyThreshold() {
+    return myLocationAccuracyThreshold;
   }
 
   /**
@@ -1062,10 +1117,12 @@ public class MapboxMapOptions implements Parcelable {
     dest.writeIntArray(myLocationBackgroundPadding);
     dest.writeInt(myLocationAccuracyAlpha);
     dest.writeInt(myLocationAccuracyTintColor);
+    dest.writeFloat(myLocationAccuracyThreshold);
 
     dest.writeString(style);
     dest.writeString(apiBaseUrl);
     dest.writeByte((byte) (textureMode ? 1 : 0));
+    dest.writeByte((byte) (prefetchesTiles ? 1 : 0));
   }
 
   @Override
@@ -1150,6 +1207,9 @@ public class MapboxMapOptions implements Parcelable {
     if (myLocationAccuracyAlpha != options.myLocationAccuracyAlpha) {
       return false;
     }
+    if (myLocationAccuracyThreshold != options.myLocationAccuracyThreshold) {
+      return false;
+    }
     if (cameraPosition != null ? !cameraPosition.equals(options.cameraPosition) : options.cameraPosition != null) {
       return false;
     }
@@ -1184,6 +1244,9 @@ public class MapboxMapOptions implements Parcelable {
       return false;
     }
     if (apiBaseUrl != null ? !apiBaseUrl.equals(options.apiBaseUrl) : options.apiBaseUrl != null) {
+      return false;
+    }
+    if (prefetchesTiles != options.prefetchesTiles) {
       return false;
     }
     return false;
@@ -1227,9 +1290,12 @@ public class MapboxMapOptions implements Parcelable {
     result = 31 * result + Arrays.hashCode(myLocationBackgroundPadding);
     result = 31 * result + myLocationAccuracyTintColor;
     result = 31 * result + myLocationAccuracyAlpha;
+    result = 31 * result + (myLocationAccuracyThreshold != +0.0f
+      ? Float.floatToIntBits(myLocationAccuracyThreshold) : 0);
     result = 31 * result + (apiBaseUrl != null ? apiBaseUrl.hashCode() : 0);
     result = 31 * result + (textureMode ? 1 : 0);
     result = 31 * result + (style != null ? style.hashCode() : 0);
+    result = 31 * result + (prefetchesTiles ? 1 : 0);
     return result;
   }
 }

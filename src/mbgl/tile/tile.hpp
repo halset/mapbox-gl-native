@@ -26,6 +26,10 @@ class RenderStyle;
 class RenderedQueryOptions;
 class SourceQueryOptions;
 
+namespace gl {
+class Context;
+} // namespace gl
+
 class Tile : private util::noncopyable {
 public:
     Tile(OverscaledTileID);
@@ -45,6 +49,7 @@ public:
     // Mark this tile as no longer needed and cancel any pending work.
     virtual void cancel() = 0;
 
+    virtual void upload(gl::Context&) = 0;
     virtual Bucket* getBucket(const style::Layer::Impl&) const = 0;
 
     virtual void setPlacementConfig(const PlacementConfig&) {}
@@ -100,6 +105,8 @@ public:
 
     // Contains the tile ID string for painting debug information.
     std::unique_ptr<DebugBucket> debugBucket;
+    
+    virtual float yStretch() const { return 1.0f; }
 
 protected:
     bool triedOptional = false;

@@ -11,8 +11,9 @@ namespace mbgl {
 
 class Tile;
 class TransformState;
+class PaintParameters;
 
-class RenderTile {
+class RenderTile final {
 public:
     RenderTile(UnwrappedTileID id_, Tile& tile_) : id(std::move(id_)), tile(tile_) {}
     RenderTile(const RenderTile&) = delete;
@@ -35,14 +36,14 @@ public:
                               style::TranslateAnchorType anchor,
                               const TransformState&) const;
 
-    void calculateMatrices(const mat4& projMatrix,
-                           const mat4& projClipMatrix,
-                           const TransformState&);
-private:
+    void startRender(PaintParameters&);
+    void finishRender(PaintParameters&);
+
     mat4 translateVtxMatrix(const mat4& tileMatrix,
                             const std::array<float, 2>& translation,
                             style::TranslateAnchorType anchor,
-                            const TransformState& state) const;
+                            const TransformState& state,
+                            const bool inViewportPixelUnits) const;
 };
 
 } // namespace mbgl

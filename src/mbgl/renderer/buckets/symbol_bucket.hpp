@@ -4,7 +4,7 @@
 #include <mbgl/map/mode.hpp>
 #include <mbgl/gl/vertex_buffer.hpp>
 #include <mbgl/gl/index_buffer.hpp>
-#include <mbgl/gl/segment.hpp>
+#include <mbgl/programs/segment.hpp>
 #include <mbgl/programs/symbol_program.hpp>
 #include <mbgl/programs/collision_box_program.hpp>
 #include <mbgl/text/glyph_range.hpp>
@@ -14,6 +14,23 @@
 #include <vector>
 
 namespace mbgl {
+
+class PlacedSymbol {
+public:
+    PlacedSymbol(Point<float> anchorPoint_, uint16_t segment_, float lowerSize_, float upperSize_,
+            std::array<float, 2> lineOffset_, float placementZoom_, bool useVerticalMode_, GeometryCoordinates line_) :
+        anchorPoint(anchorPoint_), segment(segment_), lowerSize(lowerSize_), upperSize(upperSize_),
+        lineOffset(lineOffset_), placementZoom(placementZoom_), useVerticalMode(useVerticalMode_), line(std::move(line_)) {}
+    Point<float> anchorPoint;
+    uint16_t segment;
+    float lowerSize;
+    float upperSize;
+    std::array<float, 2> lineOffset;
+    float placementZoom;
+    bool useVerticalMode;
+    GeometryCoordinates line;
+    std::vector<float> glyphOffsets;
+};
 
 class SymbolBucket : public Bucket {
 public:
@@ -26,7 +43,6 @@ public:
                  bool iconsNeedLinear);
 
     void upload(gl::Context&) override;
-    void render(Painter&, PaintParameters&, const RenderLayer&, const RenderTile&) override;
     bool hasData() const override;
     bool hasTextData() const;
     bool hasIconData() const;
@@ -44,10 +60,13 @@ public:
 
     struct TextBuffer {
         gl::VertexVector<SymbolLayoutVertex> vertices;
+        gl::VertexVector<SymbolDynamicLayoutAttributes::Vertex> dynamicVertices;
         gl::IndexVector<gl::Triangles> triangles;
-        gl::SegmentVector<SymbolTextAttributes> segments;
+        SegmentVector<SymbolTextAttributes> segments;
+        std::vector<PlacedSymbol> placedSymbols;
 
         optional<gl::VertexBuffer<SymbolLayoutVertex>> vertexBuffer;
+        optional<gl::VertexBuffer<SymbolDynamicLayoutAttributes::Vertex>> dynamicVertexBuffer;
         optional<gl::IndexBuffer<gl::Triangles>> indexBuffer;
     } text;
     
@@ -55,19 +74,24 @@ public:
     
     struct IconBuffer {
         gl::VertexVector<SymbolLayoutVertex> vertices;
+        gl::VertexVector<SymbolDynamicLayoutAttributes::Vertex> dynamicVertices;
         gl::IndexVector<gl::Triangles> triangles;
-        gl::SegmentVector<SymbolIconAttributes> segments;
+        SegmentVector<SymbolIconAttributes> segments;
+        std::vector<PlacedSymbol> placedSymbols;
+        PremultipliedImage atlasImage;
 
         optional<gl::VertexBuffer<SymbolLayoutVertex>> vertexBuffer;
+        optional<gl::VertexBuffer<SymbolDynamicLayoutAttributes::Vertex>> dynamicVertexBuffer;
         optional<gl::IndexBuffer<gl::Triangles>> indexBuffer;
     } icon;
 
     struct CollisionBoxBuffer {
         gl::VertexVector<CollisionBoxVertex> vertices;
         gl::IndexVector<gl::Lines> lines;
-        gl::SegmentVector<CollisionBoxAttributes> segments;
+        SegmentVector<CollisionBoxAttributes> segments;
 
         optional<gl::VertexBuffer<CollisionBoxVertex>> vertexBuffer;
+        optional<gl::VertexBuffer<SymbolDynamicLayoutAttributes::Vertex>> dynamicVertexBuffer;
         optional<gl::IndexBuffer<gl::Lines>> indexBuffer;
     } collisionBox;
 };

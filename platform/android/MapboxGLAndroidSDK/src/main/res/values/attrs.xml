@@ -40,6 +40,7 @@
         <attr name="mapbox_myLocationBackgroundMarginBottom" format="dimension"/>
         <attr name="mapbox_myLocationAccuracyTintColor" format="color"/>
         <attr name="mapbox_myLocationAccuracyAlpha" format="integer"/>
+        <attr name="mapbox_myLocationAccuracyThreshold" format="float"/>
 
         <!--Compass-->
         <attr name="mapbox_uiCompass" format="boolean"/>
@@ -115,6 +116,8 @@
 
         <!-- Deprecated to use TextureView-->
         <attr name="mapbox_renderTextureMode" format="boolean"/>
+
+        <attr name="mapbox_enableTilePrefetch" format="boolean"/>
 
     </declare-styleable>
 

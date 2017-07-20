@@ -160,6 +160,32 @@ public final class Property {
   @Retention(RetentionPolicy.SOURCE)
   public @interface ICON_TEXT_FIT {}
 
+  // ICON_PITCH_ALIGNMENT: Orientation of icon when map is pitched.
+
+  /**
+   * The icon is aligned to the plane of the map.
+   */
+  public static final String ICON_PITCH_ALIGNMENT_MAP = "map";
+  /**
+   * The icon is aligned to the plane of the viewport.
+   */
+  public static final String ICON_PITCH_ALIGNMENT_VIEWPORT = "viewport";
+  /**
+   * Automatically matches the value of {@link ICON_ROTATION_ALIGNMENT}.
+   */
+  public static final String ICON_PITCH_ALIGNMENT_AUTO = "auto";
+
+  /**
+   * Orientation of icon when map is pitched.
+   */
+  @StringDef({
+      ICON_PITCH_ALIGNMENT_MAP,
+      ICON_PITCH_ALIGNMENT_VIEWPORT,
+      ICON_PITCH_ALIGNMENT_AUTO,
+    })
+  @Retention(RetentionPolicy.SOURCE)
+  public @interface ICON_PITCH_ALIGNMENT {}
+
   // TEXT_PITCH_ALIGNMENT: Orientation of text when map is pitched.
 
   /**
@@ -445,6 +471,27 @@ public final class Property {
     })
   @Retention(RetentionPolicy.SOURCE)
   public @interface CIRCLE_PITCH_SCALE {}
+
+  // CIRCLE_PITCH_ALIGNMENT: Orientation of circle when map is pitched.
+
+  /**
+   * The circle is aligned to the plane of the map.
+   */
+  public static final String CIRCLE_PITCH_ALIGNMENT_MAP = "map";
+  /**
+   * The circle is aligned to the plane of the viewport.
+   */
+  public static final String CIRCLE_PITCH_ALIGNMENT_VIEWPORT = "viewport";
+
+  /**
+   * Orientation of circle when map is pitched.
+   */
+  @StringDef({
+      CIRCLE_PITCH_ALIGNMENT_MAP,
+      CIRCLE_PITCH_ALIGNMENT_VIEWPORT,
+    })
+  @Retention(RetentionPolicy.SOURCE)
+  public @interface CIRCLE_PITCH_ALIGNMENT {}
 
   // FILL_EXTRUSION_TRANSLATE_ANCHOR: Controls the translation reference point.
 

@@ -4,14 +4,10 @@
 #include <mbgl/util/chrono.hpp>
 #include <mbgl/map/map_observer.hpp>
 #include <mbgl/map/mode.hpp>
-#include <mbgl/util/geo.hpp>
-#include <mbgl/util/feature.hpp>
 #include <mbgl/util/noncopyable.hpp>
 #include <mbgl/util/size.hpp>
 #include <mbgl/annotation/annotation.hpp>
-#include <mbgl/style/transition_options.hpp>
 #include <mbgl/map/camera.hpp>
-#include <mbgl/map/query.hpp>
 
 #include <cstdint>
 #include <string>
@@ -25,47 +21,38 @@ class Backend;
 class View;
 class FileSource;
 class Scheduler;
+class RendererFrontend;
 
 namespace style {
 class Image;
-class Source;
-class Layer;
-class Light;
+class Style;
 } // namespace style
 
 class Map : private util::noncopyable {
 public:
-    explicit Map(Backend&,
+    explicit Map(RendererFrontend&,
+                 MapObserver&,
                  Size size,
                  float pixelRatio,
                  FileSource&,
                  Scheduler&,
                  MapMode mapMode = MapMode::Continuous,
-                 GLContextMode contextMode = GLContextMode::Unique,
                  ConstrainMode constrainMode = ConstrainMode::HeightOnly,
-                 ViewportMode viewportMode = ViewportMode::Default,
-                 const std::string& programCacheDir = "");
+                 ViewportMode viewportMode = ViewportMode::Default);
     ~Map();
 
     // Register a callback that will get called (on the render thread) when all resources have
     // been loaded and a complete render occurs.
     using StillImageCallback = std::function<void (std::exception_ptr)>;
-    void renderStill(View&, StillImageCallback callback);
+    void renderStill(StillImageCallback callback);
 
     // Triggers a repaint.
     void triggerRepaint();
 
-    // Main render function.
-    void render(View&);
+          style::Style& getStyle();
+    const style::Style& getStyle() const;
 
-    // Styling
-    style::TransitionOptions getTransitionOptions() const;
-    void setTransitionOptions(const style::TransitionOptions&);
-
-    void setStyleURL(const std::string&);
-    void setStyleJSON(const std::string&);
-    std::string getStyleURL() const;
-    std::string getStyleJSON() const;
+    void setStyle(std::unique_ptr<style::Style>);
 
     // Transition
     void cancelTransitions();
@@ -156,44 +143,14 @@ public:
     void updateAnnotation(AnnotationID, const Annotation&);
     void removeAnnotation(AnnotationID);
 
-    // Sources
-    std::vector<style::Source*> getSources();
-    style::Source* getSource(const std::string& sourceID);
-    void addSource(std::unique_ptr<style::Source>);
-    std::unique_ptr<style::Source> removeSource(const std::string& sourceID);
-
-    // Layers
-    std::vector<style::Layer*> getLayers();
-    style::Layer* getLayer(const std::string& layerID);
-    void addLayer(std::unique_ptr<style::Layer>, const optional<std::string>& beforeLayerID = {});
-    std::unique_ptr<style::Layer> removeLayer(const std::string& layerID);
-
-    // Images
-    void addImage(std::unique_ptr<style::Image>);
-    void removeImage(const std::string&);
-    const style::Image* getImage(const std::string&);
-
-    // Light
-    void setLight(std::unique_ptr<style::Light>);
-    style::Light* getLight();
-
-    // Defaults
-    std::string getStyleName() const;
-    LatLng getDefaultLatLng() const;
-    double getDefaultZoom() const;
-    double getDefaultBearing() const;
-    double getDefaultPitch() const;
-
-    // Feature queries
-    std::vector<Feature> queryRenderedFeatures(const ScreenCoordinate&, const RenderedQueryOptions& options = {});
-    std::vector<Feature> queryRenderedFeatures(const ScreenBox&,        const RenderedQueryOptions& options = {});
-    std::vector<Feature> querySourceFeatures(const std::string& sourceID, const SourceQueryOptions& options = {});
-
-    AnnotationIDs queryPointAnnotations(const ScreenBox&);
-
-    // Memory
-    void setSourceTileCacheSize(size_t);
-    void onLowMemory();
+    // Tile prefetching
+    //
+    // When loading a map, if `PrefetchZoomDelta` is set to any number greater than 0, the map will
+    // first request a tile for `zoom = getZoom() - delta` in a attempt to display a full map at
+    // lower resolution as quick as possible. It will get clamped at the tile source minimum zoom.
+    // The default `delta` is 4.
+    void setPrefetchZoomDelta(uint8_t delta);
+    uint8_t getPrefetchZoomDelta() const;
 
     // Debug
     void setDebug(MapDebugOptions);

@@ -6,15 +6,16 @@
 #include <mbgl/util/default_thread_pool.hpp>
 #include <mbgl/util/run_loop.hpp>
 #include <mbgl/map/transform.hpp>
-#include <mbgl/map/query.hpp>
+#include <mbgl/style/style.hpp>
 #include <mbgl/style/layers/symbol_layer.hpp>
 #include <mbgl/renderer/tile_parameters.hpp>
 #include <mbgl/renderer/buckets/symbol_bucket.hpp>
+#include <mbgl/renderer/query.hpp>
 #include <mbgl/text/collision_tile.hpp>
 #include <mbgl/geometry/feature_index.hpp>
 #include <mbgl/annotation/annotation_manager.hpp>
-#include <mbgl/sprite/sprite_atlas.hpp>
-#include <mbgl/text/glyph_atlas.hpp>
+#include <mbgl/renderer/image_manager.hpp>
+#include <mbgl/text/glyph_manager.hpp>
 
 #include <memory>
 
@@ -26,9 +27,10 @@ public:
     TransformState transformState;
     util::RunLoop loop;
     ThreadPool threadPool { 1 };
-    AnnotationManager annotationManager;
-    SpriteAtlas spriteAtlas;
-    GlyphAtlas glyphAtlas { { 512, 512, }, fileSource };
+    style::Style style { loop, fileSource, 1 };
+    AnnotationManager annotationManager { style };
+    ImageManager imageManager;
+    GlyphManager glyphManager { fileSource };
     Tileset tileset { { "https://example.com" }, { 0, 22 }, "none" };
 
     TileParameters tileParameters {
@@ -39,8 +41,9 @@ public:
         fileSource,
         MapMode::Continuous,
         annotationManager,
-        spriteAtlas,
-        glyphAtlas
+        imageManager,
+        glyphManager,
+        0
     };
 };
 
@@ -81,12 +84,14 @@ TEST(VectorTile, Issue7615) {
             symbolBucket
         }},
         nullptr,
+        {},
+        {},
         0
     });
 
     // Subsequent onLayout should not cause the existing symbol bucket to be discarded.
     tile.onLayout(GeometryTile::LayoutResult {
-        {},
+        std::unordered_map<std::string, std::shared_ptr<Bucket>>(),
         nullptr,
         nullptr,
         0

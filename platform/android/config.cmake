@@ -55,6 +55,7 @@ macro(mbgl_platform_core)
         PRIVATE platform/android/src/thread.cpp
         PRIVATE platform/default/string_stdlib.cpp
         PRIVATE platform/default/bidi.cpp
+        PRIVATE platform/default/thread_local.cpp
         PRIVATE platform/default/utf.cpp
 
         # Image handling
@@ -70,6 +71,10 @@ macro(mbgl_platform_core)
         PRIVATE platform/default/mbgl/util/shared_thread_pool.hpp
         PRIVATE platform/default/mbgl/util/default_thread_pool.cpp
         PRIVATE platform/default/mbgl/util/default_thread_pool.hpp
+
+        # Rendering
+        PRIVATE platform/android/src/android_renderer_frontend.cpp
+        PRIVATE platform/android/src/android_renderer_frontend.hpp
     )
 
     target_include_directories(mbgl-core
@@ -158,6 +163,8 @@ add_library(mbgl-android STATIC
     platform/android/src/style/sources/unknown_source.hpp
     platform/android/src/style/sources/vector_source.cpp
     platform/android/src/style/sources/vector_source.hpp
+    platform/android/src/style/sources/image_source.hpp
+    platform/android/src/style/sources/image_source.cpp
     platform/android/src/style/functions/stop.cpp
     platform/android/src/style/functions/stop.hpp
     platform/android/src/style/functions/categorical_stops.cpp
@@ -222,6 +229,8 @@ add_library(mbgl-android STATIC
     platform/android/src/geometry/lat_lng.hpp
     platform/android/src/geometry/lat_lng_bounds.cpp
     platform/android/src/geometry/lat_lng_bounds.hpp
+    platform/android/src/geometry/lat_lng_quad.cpp
+    platform/android/src/geometry/lat_lng_quad.hpp
     platform/android/src/geometry/projected_meters.cpp
     platform/android/src/geometry/projected_meters.hpp
 

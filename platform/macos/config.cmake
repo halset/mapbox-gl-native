@@ -1,6 +1,6 @@
 set(CMAKE_OSX_DEPLOYMENT_TARGET 10.10)
 
-mason_use(glfw VERSION 2017-02-09-77a8f10)
+mason_use(glfw VERSION 2017-07-13-67c9155)
 mason_use(boost_libprogram_options VERSION 1.62.0)
 mason_use(gtest VERSION 1.8.0)
 mason_use(benchmark VERSION 1.0.0-1)
@@ -19,7 +19,6 @@ macro(mbgl_platform_core)
 
         # Default styles
         PRIVATE platform/default/mbgl/util/default_styles.hpp
-        PRIVATE platform/default/mbgl/util/default_styles.cpp
 
         # Offline
         PRIVATE platform/default/mbgl/storage/offline.cpp
@@ -37,6 +36,7 @@ macro(mbgl_platform_core)
         PRIVATE platform/darwin/src/nsthread.mm
         PRIVATE platform/darwin/src/string_nsstring.mm
         PRIVATE platform/default/bidi.cpp
+        PRIVATE platform/default/thread_local.cpp
         PRIVATE platform/default/utf.cpp
 
         # Image handling
@@ -61,6 +61,7 @@ macro(mbgl_platform_core)
     )
 
     target_add_mason_package(mbgl-core PUBLIC geojson)
+    target_add_mason_package(mbgl-core PUBLIC polylabel)
     target_add_mason_package(mbgl-core PRIVATE icu)
 
     target_compile_options(mbgl-core
@@ -90,6 +91,9 @@ macro(mbgl_platform_glfw)
     target_link_libraries(mbgl-glfw
         PRIVATE mbgl-loop-darwin
     )
+    target_compile_options(mbgl-glfw
+        PRIVATE -fvisibility=hidden
+    )
 endmacro()
 
 
@@ -97,12 +101,18 @@ macro(mbgl_platform_render)
     target_link_libraries(mbgl-render
         PRIVATE mbgl-loop-darwin
     )
+    target_compile_options(mbgl-render
+        PRIVATE -fvisibility=hidden
+    )
 endmacro()
 
 
 macro(mbgl_platform_offline)
     target_link_libraries(mbgl-offline
         PRIVATE mbgl-loop-darwin
+    )
+    target_compile_options(mbgl-offline
+        PRIVATE -fvisibility=hidden
     )
 endmacro()
 
