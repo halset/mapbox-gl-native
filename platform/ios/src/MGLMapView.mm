@@ -735,6 +735,7 @@ public:
     }
 
     [self validateDisplayLink];
+    [self.glView deleteDrawable];
 
     if (_mbglMap)
     {
