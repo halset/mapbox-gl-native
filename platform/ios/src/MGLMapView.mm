@@ -317,6 +317,7 @@ public:
     BOOL _delegateHasLineWidthsForShapeAnnotations;
 
     MGLCompassDirectionFormatter *_accessibilityCompassFormatter;
+    BOOL _compassAlwaysVisible;
     NSArray<id <MGLFeature>> *_visiblePlaceFeatures;
     NSArray<id <MGLFeature>> *_visibleRoadFeatures;
     NSMutableSet<MGLFeatureAccessibilityElement *> *_featureAccessibilityElements;
@@ -552,7 +553,7 @@ public:
     // setup compass
     //
     _compassView = [[UIImageView alloc] initWithImage:self.compassImage];
-    _compassView.alpha = 0;
+    _compassView.alpha = self.compassAlwaysVisible ? 1 : 0;
     _compassView.userInteractionEnabled = YES;
     [_compassView addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleCompassTapGesture:)]];
     _compassView.accessibilityTraits = UIAccessibilityTraitButton;
@@ -2643,6 +2644,17 @@ public:
         options |= mbgl::MapDebugOptions::Overdraw;
     }
     self.mbglMap.setDebug(options);
+}
+
+-(void)setCompassAlwaysVisible:(BOOL)compassAlwaysVisible
+{
+    _compassAlwaysVisible = compassAlwaysVisible;
+    [self updateCompass];
+}
+
+-(BOOL)isCompassAlwaysVisible
+{
+    return _compassAlwaysVisible;
 }
 
 - (void)resetNorth
@@ -6603,7 +6615,7 @@ public:
     self.compassView.isAccessibilityElement = direction > 0;
     self.compassView.accessibilityValue = [_accessibilityCompassFormatter stringFromDirection:direction];
 
-    if (direction > 0 && self.compassView.alpha < 1)
+    if ((direction > 0 || self.compassAlwaysVisible) && self.compassView.alpha < 1)
     {
         [UIView animateWithDuration:MGLAnimationDuration
                               delay:0
@@ -6614,7 +6626,7 @@ public:
                          }
                          completion:nil];
     }
-    else if (direction == 0 && self.compassView.alpha > 0)
+    else if (direction == 0 && !self.compassAlwaysVisible && self.compassView.alpha > 0)
     {
         [UIView animateWithDuration:MGLAnimationDuration
                               delay:0

@@ -320,6 +320,8 @@ MGL_EXPORT
  */
 @property (nonatomic, readonly) UIImageView *compassView;
 
+@property (nonatomic, getter=isCompassAlwaysVisible) BOOL compassAlwaysVisible;
+
 /**
  The position of the compass view. The default value is `MGLOrnamentPositionTopRight`.
  */
