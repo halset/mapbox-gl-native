@@ -1015,79 +1015,8 @@ T OfflineDatabase::getPragma(const char* sql) {
 // delete an arbitrary number of old cache entries. The free pages approach saves
 // us from calling VACCUM or keeping a running total, which can be costly.
 bool OfflineDatabase::evict(uint64_t neededFreeSize) {
-    uint64_t pageSize = getPragma<int64_t>("PRAGMA page_size");
-    uint64_t pageCount = getPragma<int64_t>("PRAGMA page_count");
-
-    auto usedSize = [&] {
-        return pageSize * (pageCount - getPragma<int64_t>("PRAGMA freelist_count"));
-    };
-
-    // The addition of pageSize is a fudge factor to account for non `data` column
-    // size, and because pages can get fragmented on the database.
-    while (usedSize() + neededFreeSize + pageSize > maximumCacheSize) {
-        // clang-format off
-        mapbox::sqlite::Query accessedQuery{ getStatement(
-            "SELECT max(accessed) "
-            "FROM ( "
-            "    SELECT accessed "
-            "    FROM resources "
-            "    LEFT JOIN region_resources "
-            "    ON resource_id = resources.id "
-            "    WHERE resource_id IS NULL "
-            "  UNION ALL "
-            "    SELECT accessed "
-            "    FROM tiles "
-            "    LEFT JOIN region_tiles "
-            "    ON tile_id = tiles.id "
-            "    WHERE tile_id IS NULL "
-            "  ORDER BY accessed ASC LIMIT ?1 "
-            ") "
-        ) };
-        accessedQuery.bind(1, 50);
-        // clang-format on
-        if (!accessedQuery.run()) {
-            return false;
-        }
-        Timestamp accessed = accessedQuery.get<Timestamp>(0);
-
-        // clang-format off
-        mapbox::sqlite::Query resourceQuery{ getStatement(
-            "DELETE FROM resources "
-            "WHERE id IN ( "
-            "  SELECT id FROM resources "
-            "  LEFT JOIN region_resources "
-            "  ON resource_id = resources.id "
-            "  WHERE resource_id IS NULL "
-            "  AND accessed <= ?1 "
-            ") ") };
-        // clang-format on
-        resourceQuery.bind(1, accessed);
-        resourceQuery.run();
-        const uint64_t resourceChanges = resourceQuery.changes();
-
-        // clang-format off
-        mapbox::sqlite::Query tileQuery{ getStatement(
-            "DELETE FROM tiles "
-            "WHERE id IN ( "
-            "  SELECT id FROM tiles "
-            "  LEFT JOIN region_tiles "
-            "  ON tile_id = tiles.id "
-            "  WHERE tile_id IS NULL "
-            "  AND accessed <= ?1 "
-            ") ") };
-        // clang-format on
-        tileQuery.bind(1, accessed);
-        tileQuery.run();
-        const uint64_t tileChanges = tileQuery.changes();
-
-        // The cached value of offlineTileCount does not need to be updated
-        // here because only non-offline tiles can be removed by eviction.
-
-        if (resourceChanges == 0 && tileChanges == 0) {
-            return false;
-        }
-    }
-
+    (void)neededFreeSize;
+    (void)maximumCacheSize;
     return true;
 }
 
