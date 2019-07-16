@@ -88,8 +88,12 @@ class HTTPFileSource::Impl {
 public:
     Impl() {
         @autoreleasepool {
-            NSURLSessionConfiguration *sessionConfig = [MGLNetworkConfiguration sharedManager].sessionConfiguration;
-            session = [NSURLSession sessionWithConfiguration:sessionConfig];
+            NSURLSessionConfiguration *sessionConfig =
+            [MGLNetworkConfiguration sharedManager].sessionConfiguration;
+            id<NSURLSessionDelegate> sessionDelegate =
+            [MGLNetworkConfiguration sharedManager].sessionDelegate;
+
+            session = [NSURLSession sessionWithConfiguration:sessionConfig delegate:sessionDelegate delegateQueue:nil];
 
             userAgent = getUserAgent();
 
