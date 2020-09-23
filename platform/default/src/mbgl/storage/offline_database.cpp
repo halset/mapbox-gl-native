@@ -871,7 +871,6 @@ std::exception_ptr OfflineDatabase::deleteRegion(OfflineRegion&& region) try {
 
     evict(0);
     assert(db);
-    db->exec("VACUUM");
 
     // Ensure that the cached offlineTileCount value is recalculated.
     offlineMapboxTileCount = {};
