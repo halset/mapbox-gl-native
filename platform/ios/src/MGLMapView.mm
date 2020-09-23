@@ -918,11 +918,35 @@ public:
     }
 }
 
+- (void)updateViewsPostMapRendering {
+    // Update UIKit elements, prior to rendering
+    [self updateUserLocationAnnotationView];
+    [self updateAnnotationViews];
+    [self updateCalloutView];
+
+    // Call any pending completion blocks. This is primarily to ensure
+    // that annotations are in the expected position after core rendering
+    // and map update.
+    //
+    // TODO: Consider using this same mechanism for delegate callbacks.
+    [self processPendingBlocks];
+}
+
 - (void)renderSync
 {
-    if ( ! self.dormant && _rendererFrontend)
+    if (!self.dormant)
     {
         _rendererFrontend->render();
+        if (_rendererFrontend) {
+            _rendererFrontend->render();
+        }
+
+        // - - - - -
+
+        // TODO: This should be moved from what's essentially the UIView rendering
+        // To do this, add view models that can be updated separately, before the
+        // UIViews can be updated to match
+        [self updateViewsPostMapRendering];
     }
 }
 
@@ -1109,18 +1133,9 @@ public:
     {
         _needsDisplayRefresh = NO;
 
-        // Update UIKit elements, prior to rendering
-        [self updateUserLocationAnnotationView];
-        [self updateAnnotationViews];
-        [self updateCalloutView];
-
-        // Call any pending completion blocks. This is primarily to ensure
-        // that annotations are in the expected position after core rendering
-        // and map update.
-        //
-        // TODO: Consider using this same mechanism for delegate callbacks.
-        [self processPendingBlocks];
-        
+        // UIView update logic has moved into `renderSync` above, which now gets
+        // triggered by a call to setNeedsDisplay.
+        // See MGLMapViewOpenGLImpl::display() for more details
         _mbglView->display();
     }
 
