@@ -918,7 +918,7 @@ public:
     }
 }
 
-- (void)updateViewsPostMapRendering {
+- (void)updateViewsWithCurrentUpdateParameters  {
     // Update UIKit elements, prior to rendering
     [self updateUserLocationAnnotationView];
     [self updateAnnotationViews];
@@ -936,17 +936,12 @@ public:
 {
     if (!self.dormant)
     {
+        [self updateViewsWithCurrentUpdateParameters];
+        
         _rendererFrontend->render();
         if (_rendererFrontend) {
             _rendererFrontend->render();
         }
-
-        // - - - - -
-
-        // TODO: This should be moved from what's essentially the UIView rendering
-        // To do this, add view models that can be updated separately, before the
-        // UIViews can be updated to match
-        [self updateViewsPostMapRendering];
     }
 }
 
