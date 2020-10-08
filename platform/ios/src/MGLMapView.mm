@@ -274,6 +274,10 @@ public:
 /// Tilt gesture recognizer helper
 @property (nonatomic, assign) CGPoint dragGestureMiddlePoint;
 
+@property (nonatomic, weak) UIScreen *displayLinkScreen;
+@property (nonatomic) CADisplayLink *displayLink;
+@property (nonatomic, assign) BOOL needsDisplayRefresh;
+
 - (mbgl::Map &)mbglMap;
 
 @end
@@ -305,9 +309,6 @@ public:
 
     CLLocationDegrees _pendingLatitude;
     CLLocationDegrees _pendingLongitude;
-
-    CADisplayLink *_displayLink;
-    BOOL _needsDisplayRefresh;
 
     NSInteger _changeDelimiterSuppressionDepth;
 
@@ -442,6 +443,9 @@ public:
 
 - (void)commonInit
 {
+    // Default is YES, which matches < 6.2.0
+    _renderingInInactiveStateEnabled = YES;
+    
     _opaque = NO;
 
     // setup accessibility
@@ -457,8 +461,8 @@ public:
 
     // setup mbgl view
     _mbglView = MGLMapViewImpl::Create(self);
-    
-    BOOL background = [UIApplication sharedApplication].applicationState == UIApplicationStateBackground;
+
+    BOOL background = (self.applicationState == UIApplicationStateBackground);
     if (!background)
     {
         _mbglView->createView();
@@ -720,8 +724,8 @@ public:
         [self removeAnnotations:annotations];
     }
 
-    [self validateDisplayLink];
-
+    [self destroyDisplayLink];
+    
     [self destroyCoreObjects];
 
     [self.compassViewConstraints removeAllObjects];
@@ -918,23 +922,26 @@ public:
     }
 }
 
-- (void)updateViewsWithCurrentUpdateParameters  {
+- (void)updateViewsWithCurrentUpdateParameters {
     // Update UIKit elements, prior to rendering
     [self updateUserLocationAnnotationView];
     [self updateAnnotationViews];
     [self updateCalloutView];
-
-    // Call any pending completion blocks. This is primarily to ensure
-    // that annotations are in the expected position after core rendering
-    // and map update.
-    //
-    // TODO: Consider using this same mechanism for delegate callbacks.
-    [self processPendingBlocks];
 }
 
-- (void)renderSync
+- (BOOL)renderSync
 {
-    if (!self.dormant)
+    BOOL hasPendingBlocks = (self.pendingCompletionBlocks.count > 0);
+
+    if (!self.needsDisplayRefresh && !hasPendingBlocks) {
+        return NO;
+    }
+
+    BOOL needsRender = self.needsDisplayRefresh;
+
+    self.needsDisplayRefresh = NO;
+    
+    if (!self.dormant && needsRender)
     {
         [self updateViewsWithCurrentUpdateParameters];
         
@@ -943,20 +950,30 @@ public:
             _rendererFrontend->render();
         }
     }
+    
+    if (hasPendingBlocks) {
+        // Call any pending completion blocks. This is primarily to ensure
+        // that annotations are in the expected position after core rendering
+        // and map update.
+        //
+        // TODO: Consider using this same mechanism for delegate callbacks.
+        [self processPendingBlocks];
+    }
+
+    return YES;
 }
 
 // This gets called when the view dimension changes, e.g. because the device is being rotated.
 - (void)layoutSubviews
 {
+    [super layoutSubviews];
+
     // Calling this here instead of in the scale bar itself because if this is done in the
     // scale bar instance, it triggers a call to this `layoutSubviews` method that calls
     // `_mbglMap->setSize()` just below that triggers rendering update which triggers
     // another scale bar update which causes a rendering update loop and a major performace
-    // degradation. The only time the scale bar's intrinsic content size _must_ invalidated
-    // is here as a reaction to this object's view dimension changes.
+    // degradation.
     [self.scaleBar invalidateIntrinsicContentSize];
-    
-    [super layoutSubviews];
 
     [self adjustContentInset];
 
@@ -1089,7 +1106,7 @@ public:
 {
     // Only add a block if the display link (that calls processPendingBlocks) is
     // running, otherwise fall back to calling immediately.
-    if (_displayLink && !_displayLink.isPaused)
+    if (self.displayLink && !self.displayLink.isPaused)
     {
         [self willChangeValueForKey:@"pendingCompletionBlocks"];
         [self.pendingCompletionBlocks addObject:block];
@@ -1098,6 +1115,117 @@ public:
     }
     
     return NO;
+}
+
+- (void)resumeRenderingIfNecessary {
+    MGLLogDebug(@"[%p] DL.paused=<%p>.paused=%d", self, self.displayLink, self.displayLink.paused);
+
+    // Most times, we should already have a display link created at this point,
+    // which may or may not be running. However, at the start of the application,
+    // it's possible to have a situation where the display link hasn't been created.
+
+    // Reverse the process of going into the background
+    if (self.applicationState != UIApplicationStateBackground) {
+        if (self.dormant) {
+            _mbglView->createView();
+            self.dormant = NO;
+        }
+
+        // Check display link, if necessary
+        if (!self.displayLink) {
+            if ([self windowScreen]) {
+                [self createDisplayLink];
+            }
+        }
+    }
+
+    // Start the display link if we need to
+    if ((self.applicationState == UIApplicationStateActive) ||
+        (self.applicationState == UIApplicationStateInactive && self.renderingInInactiveStateEnabled)) {
+
+        BOOL mapViewVisible = self.isVisible;
+        if (self.displayLink) {
+            if (mapViewVisible && self.displayLink.isPaused) {
+                [self startDisplayLink];
+            }
+            else if (!mapViewVisible && !self.displayLink.isPaused) {
+                // Unlikely scenario
+                [self stopDisplayLink];
+            }
+        }
+    }
+
+    // Reveal the snapshot view
+
+    if (self.glSnapshotView && !self.glSnapshotView.isHidden) {
+        [UIView transitionWithView:self
+                          duration:0.25
+                           options:UIViewAnimationOptionTransitionCrossDissolve
+                        animations:^{
+            self.glSnapshotView.hidden = YES;
+        }
+                        completion:^(BOOL finished) {
+            [self.glSnapshotView.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
+        }];
+    }
+}
+
+- (BOOL)isDisplayLinkActive {
+    MGLLogDebug(@"[%p]", self);
+    return (self.displayLink && !self.displayLink.isPaused);
+}
+
+- (void)createDisplayLink
+{
+    MGLLogDebug(@"[%p]", self);
+
+    // Create and start the display link in a *paused* state
+    MGLAssert(!self.displayLinkScreen, @"");
+    MGLAssert(!self.displayLink, @"");
+    MGLAssert(self.window, @"");
+    MGLAssert(self.window.screen, @"");
+
+    self.displayLinkScreen  = self.window.screen;
+    self.displayLink        = [self.window.screen displayLinkWithTarget:self selector:@selector(updateFromDisplayLink:)];
+    self.displayLink.paused = YES;
+
+    [self updateDisplayLinkPreferredFramesPerSecond];
+
+    [self.displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
+
+    if (_mbglMap && self.mbglMap.getMapOptions().constrainMode() == mbgl::ConstrainMode::None)
+    {
+        self.mbglMap.setConstrainMode(mbgl::ConstrainMode::HeightOnly);
+    }
+}
+
+- (void)destroyDisplayLink
+{
+    MGLLogDebug(@"[%p]", self);
+    [self.displayLink invalidate];
+    self.displayLink = nil;
+    self.displayLinkScreen = nil;
+    self.needsDisplayRefresh = NO;
+    [self processPendingBlocks];
+}
+
+- (void)startDisplayLink
+{
+    MGLLogDebug(@"[%p]", self);
+    MGLAssert(self.displayLink, @"");
+    MGLAssert([self isVisible], @"Display link should only be started when allowed");
+
+    self.displayLink.paused = NO;
+    [self setNeedsRerender];
+    [self updateFromDisplayLink:self.displayLink];
+}
+
+- (void)stopDisplayLink
+{
+    MGLLogDebug(@"[%p]", self);
+    self.displayLink.paused = YES;
+    self.needsDisplayRefresh = NO;
+    [self processPendingBlocks];
 }
 
 #pragma mark - Life Cycle -
@@ -1113,7 +1241,7 @@ public:
     }
 
     // Mismatched display link
-    if (displayLink && displayLink != _displayLink) {
+    if (displayLink && displayLink != self.displayLink) {
         return;
     }
 
@@ -1124,10 +1252,8 @@ public:
         return;
     }
     
-    if (_needsDisplayRefresh || (self.pendingCompletionBlocks.count > 0))
+    if (self.needsDisplayRefresh || (self.pendingCompletionBlocks.count > 0))
     {
-        _needsDisplayRefresh = NO;
-
         // UIView update logic has moved into `renderSync` above, which now gets
         // triggered by a call to setNeedsDisplay.
         // See MGLMapViewOpenGLImpl::display() for more details
@@ -1138,7 +1264,7 @@ public:
     {
         CFTimeInterval now = CACurrentMediaTime();
 
-        self.frameTime = now - _displayLink.timestamp;
+        self.frameTime = now - self.displayLink.timestamp;
         _frameDurations += self.frameTime;
 
         _frameCount++;
@@ -1160,7 +1286,7 @@ public:
 {
     MGLAssertIsMainThread();
 
-    _needsDisplayRefresh = YES;
+    self.needsDisplayRefresh = YES;
 }
 
 - (void)willTerminate
@@ -1169,41 +1295,82 @@ public:
 
     if ( ! self.dormant)
     {
-        [self validateDisplayLink];
+        [self.displayLink invalidate];
+        self.displayLink = nil;
+
         self.dormant = YES;
+
+        if (_rendererFrontend) {
+            _rendererFrontend->reduceMemoryUse();
+        }
+
         _mbglView->deleteView();
     }
 
     [self destroyCoreObjects];
 }
 
+- (UIApplicationState)applicationState {
+    return [UIApplication sharedApplication].applicationState;
+}
+
+- (UIScreen *)windowScreen {
+    UIScreen *screen;
+
+#ifdef SUPPORT_UIWINDOWSCENE
+    if (@available(iOS 13.0, *)) {
+        if (self.window.windowScene) {
+            screen = self.window.windowScene.screen;
+        }
+    }
+#endif
+
+    // Fallback if there's no windowScene
+    if (!screen) {
+        screen = self.window.screen;
+    }
+
+    return screen;
+}
+
+- (BOOL)isVisible
+{
+    // "Visible" is not strictly true here - for example, the view hierarchy is not
+    // currently observed (e.g. looking at a parent's or the window's hidden
+    // status.
+    // This does NOT take application state into account
+    UIScreen *screen = [self windowScreen];
+    return (!self.isHidden && screen);
+}
+
+
 - (void)validateDisplayLink
 {
     BOOL isVisible = self.superview && self.window;
-    if (isVisible && ! _displayLink)
+    if (isVisible && ! self.displayLink)
     {
         if (_mbglMap && self.mbglMap.getMapOptions().constrainMode() == mbgl::ConstrainMode::None)
         {
             self.mbglMap.setConstrainMode(mbgl::ConstrainMode::HeightOnly);
         }
 
-        _displayLink = [self.window.screen displayLinkWithTarget:self selector:@selector(updateFromDisplayLink:)];
+        self.displayLink = [self.window.screen displayLinkWithTarget:self selector:@selector(updateFromDisplayLink:)];
         [self updateDisplayLinkPreferredFramesPerSecond];
-        [_displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
-        _needsDisplayRefresh = YES;
-        [self updateFromDisplayLink:_displayLink];
+        [self.displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
+        self.needsDisplayRefresh = YES;
+        [self updateFromDisplayLink:self.displayLink];
     }
-    else if ( ! isVisible && _displayLink)
+    else if ( ! isVisible && self.displayLink)
     {
-        [_displayLink invalidate];
-        _displayLink = nil;
+        [self.displayLink invalidate];
+        self.displayLink = nil;
         [self processPendingBlocks];
     }
 }
 
 - (void)updateDisplayLinkPreferredFramesPerSecond
 {
-    if (!_displayLink)
+    if (!self.displayLink)
     {
         return;
     }
@@ -1222,7 +1389,7 @@ public:
 
     if (@available(iOS 10.0, *))
     {
-        _displayLink.preferredFramesPerSecond = newFrameRate;
+        self.displayLink.preferredFramesPerSecond = newFrameRate;
     }
     else
     {
@@ -1233,7 +1400,7 @@ public:
         // `0` is an alias for maximum frame rate.
         newFrameRate = newFrameRate ?: maximumFrameRate;
 
-        _displayLink.frameInterval = maximumFrameRate / MIN(newFrameRate, maximumFrameRate);
+        self.displayLink.frameInterval = maximumFrameRate / MIN(newFrameRate, maximumFrameRate);
     }
 }
 
@@ -1273,10 +1440,25 @@ public:
         // slow down. The exact cause of this is unknown, but this work around
         // appears to lessen the effects.
         _mbglView->setPresentsWithTransaction(NO);
-
-        // Moved from didMoveToWindow
-        [self validateDisplayLink];
     }
+    
+    // Changing windows regardless of whether it's a new one, or the map is being
+    // removed from the hierarchy
+    [self destroyDisplayLink];
+
+    if (self.window) {
+#ifdef SUPPORT_UIWINDOWSCENE
+        if (@available(iOS 13.0, *))
+        {
+            [self.window removeObserver:self forKeyPath:@"windowScene" context:windowScreenContext];
+        }
+        else
+#endif
+        {
+            [self.window removeObserver:self forKeyPath:@"screen" context:windowScreenContext];
+        }
+    }
+
 }
 
 - (void)didMoveToWindow
@@ -1286,15 +1468,24 @@ public:
     if (self.window)
     {
         // See above comment
-        _mbglView->setPresentsWithTransaction(self.enablePresentsWithTransaction);
+        [self resumeRenderingIfNecessary];
+        [self updatePresentsWithTransaction];
 
-        [self validateDisplayLink];
+#ifdef SUPPORT_UIWINDOWSCENE
+        if (@available(iOS 13.0, *))
+        {
+            [self.window addObserver:self forKeyPath:@"windowScene" options:NSKeyValueObservingOptionNew|NSKeyValueObservingOptionOld context:windowScreenContext];
+        }
+        else
+#endif
+        {
+            [self.window addObserver:self forKeyPath:@"screen" options:NSKeyValueObservingOptionNew|NSKeyValueObservingOptionOld context:windowScreenContext];
+        }
     }
 }
 
 - (void)didMoveToSuperview
 {
-    [self validateDisplayLink];
     if (self.superview)
     {
         [self installConstraints];
@@ -1427,8 +1618,12 @@ public:
 
 - (void)didBecomeActive:(NSNotification *)notification
 {
-    [self resumeRendering:notification];
-    self.lastSnapshotImage = nil;
+    MGLLogDebug(@"[%p] DL.paused=<%p>.paused=%d", self, self.displayLink, self.displayLink.paused);
+
+    // Most times, we should already have a display link created at this point,
+    // which may or may not be running. However, at the start of the application,
+    // it's possible to have a situation where the display link hasn't been created.
+    [self resumeRenderingIfNecessary];
 }
 
 #pragma mark - GL / display link wake/sleep
@@ -1480,7 +1675,7 @@ public:
 
         [MGLMapboxEvents flush];
 
-        _displayLink.paused = YES;
+        self.displayLink.paused = YES;
         [self processPendingBlocks];
 
         if ( ! self.glSnapshotView)
@@ -1521,7 +1716,7 @@ public:
 
         [self.glSnapshotView.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
 
-        _displayLink.paused = NO;
+        self.displayLink.paused = NO;
 
         [self validateLocationServices];
 
@@ -1533,7 +1728,7 @@ public:
 - (void)setHidden:(BOOL)hidden
 {
     super.hidden = hidden;
-    _displayLink.paused = hidden;
+    self.displayLink.paused = hidden;
     
     if (hidden)
     {
@@ -2458,6 +2653,8 @@ public:
 }
 
 #pragma mark - Properties -
+
+static void *windowScreenContext = &windowScreenContext;
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
 {

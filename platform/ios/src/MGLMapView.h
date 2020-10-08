@@ -416,6 +416,19 @@ MGL_EXPORT
 @property (nonatomic, assign) MGLMapViewPreferredFramesPerSecond preferredFramesPerSecond;
 
 /**
+ :nodoc:
+ Whether map rendering should occur during the `UIApplicationStateInactive` state.
+
+ The default value of this property is `YES`. This matches the behavior of SDKs
+ pre 6.2.0.
+
+ This property is ignored for map views where background rendering is permitted.
+
+ This property should be considered undocumented, and prone to change.
+ */
+@property (nonatomic, assign) BOOL renderingInInactiveStateEnabled;
+
+/**
  A Boolean value indicating whether the map should prefetch tiles.
  
  When this property is set to `YES`, the map view prefetches tiles designed for
