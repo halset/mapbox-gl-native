@@ -83,7 +83,8 @@ bool PlacementController::placementIsRecent(TimePoint now, const float zoom, opt
 bool PlacementController::hasTransitions(TimePoint now) const {
     if (!placement->transitionsEnabled()) return false;
 
-    if (stale) return true;
+    // TODO: this is leading to *a*lot* of readraws. skipping this and hope for the best.
+    // if (stale) return true;
 
     return placement->hasTransitions(now);
 }
