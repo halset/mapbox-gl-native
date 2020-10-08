@@ -4782,7 +4782,8 @@ static void *windowScreenContext = &windowScreenContext;
         // hit testing fails.
         auto end = std::remove_if(nearbyAnnotations.begin(), nearbyAnnotations.end(), [&](const MGLAnnotationTag annotationTag) {
             id <MGLAnnotation> annotation = [self annotationWithTag:annotationTag];
-            MGLAssert(annotation, @"Unknown annotation found nearby tap");
+            // MGLAssert(annotation, @"Unknown annotation found nearby tap");
+            MGLLogInfo(@"Unknown annotation found nearby tap");
             if ( ! annotation)
             {
                 return true;
