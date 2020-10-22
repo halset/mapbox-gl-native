@@ -3966,6 +3966,8 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				STRIP_INSTALLED_PRODUCT = NO;
+				STRIP_STYLE = debugging;
+				STRIP_SWIFT_SYMBOLS = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				SYMROOT = ../../build/ios;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -4252,6 +4254,8 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				STRIP_INSTALLED_PRODUCT = NO;
+				STRIP_STYLE = debugging;
+				STRIP_SWIFT_SYMBOLS = NO;
 				SYMROOT = ../../build/ios;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -4322,6 +4326,8 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				STRIP_INSTALLED_PRODUCT = NO;
+				STRIP_STYLE = debugging;
+				STRIP_SWIFT_SYMBOLS = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				SYMROOT = ../../build/ios;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -4508,7 +4514,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.mapbox.Mapbox;
 				PRODUCT_NAME = Mapbox;
 				SKIP_INSTALL = YES;
-				STRIP_STYLE = "non-global";
+				STRIP_STYLE = debugging;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "__attribute__((visibility (\"default\"))) ";
 			};
@@ -4608,7 +4614,7 @@
 				PRODUCT_NAME = Mapbox;
 				PUBLIC_HEADERS_FOLDER_PATH = Headers;
 				SKIP_INSTALL = YES;
-				STRIP_STYLE = "non-global";
+				STRIP_STYLE = debugging;
 				VERSION_INFO_PREFIX = "__attribute__((visibility (\"default\"))) ";
 			};
 			name = Release;
