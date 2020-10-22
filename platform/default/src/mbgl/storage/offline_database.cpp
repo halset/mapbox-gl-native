@@ -1216,8 +1216,9 @@ std::exception_ptr OfflineDatabase::setMaximumAmbientCacheSize(uint64_t size) {
             * getPragma<int64_t>("PRAGMA page_count");
 
         if (databaseSize > maximumAmbientCacheSize) {
-            evict(0);
-            db->exec("VACUUM");
+            Log::Info(Event::Database, "Skipping evict+VACUUM to truncate cache size to prevent hang on huge offline db");
+            // evict(0);
+            // db->exec("VACUUM");
         }
 
         return nullptr;
